@@ -1,54 +1,94 @@
-use rs_srt::packet::control::{
-    ControlInformation,
-    handshake::{Handshake, HandshakeEncryption, HandshakeType},
+use rs_srt::packet::{
+    Packet, PacketContent,
+    control::{ControlInformation, handshake::Handshake},
 };
 use std::net::UdpSocket;
 
-use rs_srt::packet::{Packet, PacketContent};
+fn handshake(socket: &UdpSocket) -> anyhow::Result<()> {
+    let mut buf = [0; 80];
 
-fn main() -> anyhow::Result<()> {
-    let socket = UdpSocket::bind("0.0.0.0:9000")?;
+    println!("Waiting for a handshake...");
 
-    let mut buf = [0; 1024];
+    //
+    // Induction
+    //
 
     let (n, addr) = socket.recv_from(&mut buf)?;
     let data = &buf[..n];
-    println!("[*] Received {n} bytes");
+
+    println!("Connection: {addr}");
 
     let in_packet = Packet::from_raw(data)?;
-    println!(" IN\n{in_packet:#?}");
 
     let PacketContent::Control(ControlInformation::Handshake(handshake)) = in_packet.content else {
-        panic!("Failed to unwrap handshake");
+        return Err(anyhow::anyhow!("Failed to unwrap handshake"));
     };
-
-    println!("\n{}\n", "=".repeat(40));
 
     let out_packet_v4 = Packet {
         timestamp: in_packet.timestamp + 1,
         dest_socket_id: handshake.srt_socket_id,
-        // dest_socket_id: 0,
         content: PacketContent::Control(ControlInformation::Handshake(Handshake {
             srt_socket_id: 42,
             syn_cookie: 42,
             ..handshake
         })),
     };
-    println!(
-        " OUT ({})\n\n{out_packet_v4:#?}",
-        out_packet_v4.to_raw().len()
-    );
-
-    println!("\n{}\n", "=".repeat(40));
 
     socket.send_to(&out_packet_v4.to_raw(), addr)?;
 
-    let (n, _) = socket.recv_from(&mut buf)?;
-    let data = &buf[..n];
-    let in_packet = Packet::from_raw(data)?;
-    println!(" IN\n{in_packet:#?}");
+    println!("Completed Induction");
 
-    println!("Done");
+    //
+    // Conclusion
+    //
+
+    let (n, addr) = socket.recv_from(&mut buf)?;
+    let data = &buf[..n];
+
+    let in_packet = Packet::from_raw(data)?;
+
+    let PacketContent::Control(ControlInformation::Handshake(handshake)) = in_packet.content else {
+        return Err(anyhow::anyhow!("Failed to unwrap handshake"));
+    };
+
+    let out_packet_v4 = Packet {
+        timestamp: in_packet.timestamp + 1,
+        dest_socket_id: handshake.srt_socket_id,
+        content: PacketContent::Control(ControlInformation::Handshake(Handshake { ..handshake })),
+    };
+
+    socket.send_to(&out_packet_v4.to_raw(), addr)?;
+
+    println!("Completed Conclusion");
+
+    println!("Done!");
 
     Ok(())
+}
+
+fn handle_packet(socket: &UdpSocket) -> anyhow::Result<()> {
+    let mut buf = [0; 1024];
+
+    let (n, addr) = socket.recv_from(&mut buf)?;
+    let data = &buf[..n];
+
+    println!("[*] Received {n} bytes");
+
+    // let in_packet = Packet::from_raw(data)?;
+
+    // thread::sleep(Duration::from_secs(1));
+
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    let socket = UdpSocket::bind("0.0.0.0:9000")?;
+
+    handshake(&socket)?;
+
+    println!("{}\nStream started\n{}", "=".repeat(14), "=".repeat(14));
+
+    loop {
+        handle_packet(&socket)?;
+    }
 }
