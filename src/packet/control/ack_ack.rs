@@ -7,7 +7,7 @@ pub struct AckAck {
 
 impl AckAck {
     pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
-        let ack_number = u32::from_be_bytes(raw[0..4].try_into()?);
+        let ack_number = u32::from_be_bytes(raw[4..8].try_into()?);
 
         Ok(Self {
             ack_number,

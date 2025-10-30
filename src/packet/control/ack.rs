@@ -20,7 +20,7 @@ pub struct Ack {
 impl Ack {
     /// 44 BYTES
     pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
-        let ack_number = u32::from_be_bytes(raw[0..4].try_into()?);
+        let ack_number = u32::from_be_bytes(raw[4..8].try_into()?);
 
         let last_ackd_packet_sequence_number = u32::from_be_bytes(raw[16..20].try_into()?);
         let rtt = u32::from_be_bytes(raw[20..24].try_into()?);
