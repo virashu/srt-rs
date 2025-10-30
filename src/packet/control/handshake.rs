@@ -1,23 +1,10 @@
 //! <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1>
+pub mod extensions;
 
-use crate::macros::auto_try_from;
-
-pub mod handshake_extension_flags {
-    pub const HSREQ: u16 = 0x00_01;
-    pub const KMREQ: u16 = 0x00_02;
-    pub const CONFIG: u16 = 0x00_04;
-}
-
-pub mod handshake_extension_message_flags {
-    pub const TSBPDSND: u32 = 0x00_00_00_01;
-    pub const TSBPDRCV: u32 = 0x00_00_00_02;
-    pub const CRYPT: u32 = 0x00_00_00_04;
-    pub const TLPKTDROP: u32 = 0x00_00_00_08;
-    pub const PERIODICNAK: u32 = 0x00_00_00_10;
-    pub const REXMITFLG: u32 = 0x00_00_00_20;
-    pub const STREAM: u32 = 0x00_00_00_40;
-    pub const PACKET_FILTER: u32 = 0x00_00_00_80;
-}
+use crate::{
+    macros::auto_try_from,
+    packet::control::handshake::extensions::{HandshakeExtension, handshake_extension_flags},
+};
 
 auto_try_from! {
     #[repr(u16)]
@@ -42,51 +29,8 @@ auto_try_from! {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct HandshakeExtension {
-    pub r#type: u16,
-    pub length: u16,
-    pub srt_version: u32,
-    pub srt_flags: u32,
-    pub receiver_delay: u16,
-    pub sender_delay: u16,
-}
-
-impl HandshakeExtension {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
-        let r#type = u16::from_be_bytes(raw[0..2].try_into()?);
-        let length = u16::from_be_bytes(raw[2..4].try_into()?);
-
-        let srt_version = u32::from_be_bytes(raw[4..8].try_into()?);
-        let srt_flags = u32::from_be_bytes(raw[8..12].try_into()?);
-        let receiver_delay = u16::from_be_bytes(raw[12..14].try_into()?);
-        let sender_delay = u16::from_be_bytes(raw[14..16].try_into()?);
-
-        Ok(Self {
-            r#type,
-            length,
-            srt_version,
-            srt_flags,
-            receiver_delay,
-            sender_delay,
-        })
-    }
-
-    pub fn to_raw(&self) -> Vec<u8> {
-        let mut res = Vec::new();
-
-        res.extend(self.r#type.to_be_bytes());
-        res.extend(self.length.to_be_bytes());
-        res.extend(self.srt_version.to_be_bytes());
-        res.extend(self.srt_flags.to_be_bytes());
-        res.extend(self.receiver_delay.to_be_bytes());
-        res.extend(self.sender_delay.to_be_bytes());
-
-        res
-    }
-}
-
-/// [ 48 BYTES (+ Extension) ]
+/// `Control Information Field` of `Handshake`
+/// [ 48 BYTES (+ Extensions) ]
 #[derive(Clone, Debug)]
 pub struct Handshake {
     pub version: u32,
@@ -103,7 +47,7 @@ pub struct Handshake {
 }
 
 impl Handshake {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    pub fn from_raw_cif(raw: &[u8]) -> anyhow::Result<Self> {
         let version = u32::from_be_bytes(raw[0..4].try_into()?);
 
         let encryption = u16::from_be_bytes(raw[4..6].try_into()?).try_into()?;
@@ -135,11 +79,11 @@ impl Handshake {
         if (extension_field & handshake_extension_flags::KMREQ != 0)
             && handshake_type != HandshakeType::Induction
         {
-            println!("Kmreq")
+            println!("Kmreq");
         }
 
         if extension_field & handshake_extension_flags::CONFIG != 0 {
-            println!("Config")
+            println!("Config");
         }
 
         Ok(Self {
@@ -157,7 +101,7 @@ impl Handshake {
         })
     }
 
-    pub fn to_raw(&self) -> Vec<u8> {
+    pub fn to_raw_cif(&self) -> Vec<u8> {
         let mut res = Vec::new();
 
         res.extend(self.version.to_be_bytes());
@@ -194,8 +138,8 @@ mod tests {
             10, 162, 106, 0, 0, 0, 0, 1, 0, 0, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
 
-        let h = Handshake::from_raw(&raw).unwrap();
+        let h = Handshake::from_raw_cif(&raw).unwrap();
 
-        assert_eq!(raw, h.to_raw().as_slice());
+        assert_eq!(raw, h.to_raw_cif().as_slice());
     }
 }

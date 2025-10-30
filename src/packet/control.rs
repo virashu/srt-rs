@@ -1,10 +1,15 @@
-use crate::{
-    packet::control::{handshake::Handshake, keep_alive::KeepAlive},
-    serial::Serial,
+use crate::packet::control::{
+    ack::Ack, ack_ack::AckAck, drop_req::DropReq, handshake::Handshake, nak::Nak,
+    peer_error::PeerError,
 };
 
+// Control Information Field of different Types
+pub mod ack;
+pub mod ack_ack;
+pub mod drop_req;
 pub mod handshake;
-pub mod keep_alive;
+pub mod nak;
+pub mod peer_error;
 
 pub mod control_types {
     pub const HANDSHAKE: u16 = 0x0000;
@@ -19,39 +24,78 @@ pub mod control_types {
     pub const OTHER: u16 = 0x7FFF;
 }
 
+/// Contains `Type`, `Subtype`, `Type-specific Information`, `CIF`
 #[derive(Clone, Debug)]
-pub enum ControlInformation {
+pub enum ControlPacketInfo {
     Handshake(Handshake),
-    KeepAlive(KeepAlive),
+    KeepAlive,
+    Ack(Ack),
+    Nak(Nak),
+    CongestionWarning,
+    Shutdown,
+    AckAck(AckAck),
+    DropReq(DropReq),
+    PeerError(PeerError),
+    Other,
 }
 
-impl ControlInformation {
+impl ControlPacketInfo {
     pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
         let control_type = u16::from_be_bytes(raw[0..2].try_into()?) & !(1 << 15);
         let _subtype = u16::from_be_bytes(raw[2..4].try_into()?);
-
-        // Data after package header
-        let content = &raw[16..];
+        let _type_specific = &raw[4..8];
 
         Ok(match control_type {
-            control_types::HANDSHAKE => Self::Handshake(Handshake::from_raw(content)?),
-            _ => todo!("{control_type}"),
+            control_types::HANDSHAKE => Self::Handshake(Handshake::from_raw_cif(&raw[16..])?),
+            control_types::KEEPALIVE => Self::KeepAlive,
+            control_types::ACK => todo!("Ack"),
+            control_types::NAK => todo!("Nak"),
+            control_types::CONGESTION_WARNING => todo!("CongestionWarning"),
+            control_types::SHUTDOWN => Self::Shutdown,
+            control_types::ACKACK => Self::AckAck(AckAck::from_raw(raw)?),
+            control_types::DROPREQ => todo!("DropReq"),
+            control_types::PEERERROR => todo!("PeerError"),
+            control_types::OTHER => todo!("Other"),
+
+            _ => unreachable!(),
         })
     }
 
-    pub fn raw_header(&self) -> Vec<u8> {
-        let r#type = match self {
-            Self::Handshake(_) => control_types::HANDSHAKE,
-            Self::KeepAlive(_) => control_types::KEEPALIVE,
-        };
-
+    /// Get control header (`Type`, `Subtype` and `Type-specific Information`) with `Subtype` and `Type-specific Information` fields equal to 0.
+    /// (For types, that don't have info in those fields)
+    fn empty_header_with_type(r#type: u16) -> Vec<u8> {
         [(r#type | (1 << 15)).to_be_bytes(), [0, 0], [0, 0], [0, 0]].concat()
     }
 
+    /// Get `Type`, `Subtype` and `Type-specific Information`
+    pub fn raw_header(&self) -> Vec<u8> {
+        match self {
+            Self::Handshake(_) => Self::empty_header_with_type(control_types::HANDSHAKE),
+            Self::KeepAlive => Self::empty_header_with_type(control_types::KEEPALIVE),
+            Self::Ack(ack) => ack.raw_header(),
+            Self::Nak(_) => Self::empty_header_with_type(control_types::NAK),
+            Self::CongestionWarning => {
+                Self::empty_header_with_type(control_types::CONGESTION_WARNING)
+            }
+            Self::Shutdown => Self::empty_header_with_type(control_types::SHUTDOWN),
+            Self::AckAck(ack_ack) => ack_ack.raw_header(),
+            Self::DropReq(drop_req) => drop_req.raw_header(),
+            Self::PeerError(peer_error) => peer_error.raw_header(),
+            Self::Other => Self::empty_header_with_type(control_types::OTHER),
+        }
+    }
+
+    /// Get `Control Information Field (CIF)`
     pub fn raw_content(&self) -> Vec<u8> {
         match self {
-            Self::Handshake(h) => h.to_raw(),
-            Self::KeepAlive(k) => k.to_raw(),
+            Self::Handshake(h) => h.to_raw_cif(),
+            Self::Ack(ack) => ack.raw_content(),
+            Self::Nak(_) => todo!(),
+            Self::DropReq(_) => todo!(),
+            Self::Other => todo!(),
+
+            // Other types don't have CIF
+            _ => Vec::new(),
         }
     }
 }

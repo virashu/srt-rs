@@ -14,7 +14,7 @@ pub enum EncryptionFlag {
 }
 
 #[derive(Debug)]
-pub struct DataPacket {
+pub struct DataPacketInfo {
     pub packet_sequence_number: u32,
     pub position: PacketPosition,
     pub order: bool,
@@ -23,7 +23,7 @@ pub struct DataPacket {
     pub message_number: u32,
 }
 
-impl DataPacket {
+impl DataPacketInfo {
     pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
         let packet_sequence_number = u32::from_be_bytes(raw[0..4].try_into()?) & !(1 << 31);
 

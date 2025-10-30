@@ -1,12 +1,12 @@
 pub mod control;
 pub mod data;
 
-use crate::packet::{control::ControlInformation, data::DataPacket};
+use crate::packet::{control::ControlPacketInfo, data::DataPacketInfo};
 
 #[derive(Debug)]
 pub enum PacketContent {
-    Data(DataPacket),
-    Control(ControlInformation),
+    Data(DataPacketInfo),
+    Control(ControlPacketInfo),
 }
 
 impl PacketContent {
@@ -14,8 +14,8 @@ impl PacketContent {
         let packet_type = (raw[0] & 0b1000_0000) >> 7;
 
         Ok(match packet_type {
-            1 => Self::Control(ControlInformation::from_raw(raw)?),
-            0 => Self::Data(DataPacket::from_raw(raw)?),
+            1 => Self::Control(ControlPacketInfo::from_raw(raw)?),
+            0 => Self::Data(DataPacketInfo::from_raw(raw)?),
             _ => unreachable!(),
         })
     }
