@@ -147,11 +147,12 @@ pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
         addr,
         peer_srt_socket_id: handshake.srt_socket_id,
         ack_counter: 1.into(),
+        received_since_ack: 0.into(),
     })
 }
 
-pub fn make_ack(data: &DataPacketInfo, ack_number: u32) -> anyhow::Result<PacketContent> {
-    Ok(PacketContent::Control(ControlPacketInfo::Ack(Ack {
+pub fn make_full_ack(data: &DataPacketInfo, ack_number: u32) -> anyhow::Result<PacketContent> {
+    Ok(PacketContent::Control(ControlPacketInfo::Ack(Ack::Full {
         ack_number,
         last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
         rtt: 0,

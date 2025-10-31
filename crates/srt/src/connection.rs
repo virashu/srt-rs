@@ -12,6 +12,7 @@ pub struct Connection {
     pub addr: SocketAddr,
     pub peer_srt_socket_id: u32,
     pub ack_counter: AtomicU32,
+    pub received_since_ack: AtomicU32,
 }
 
 impl Connection {
@@ -19,10 +20,18 @@ impl Connection {
         self.ack_counter.fetch_add(1, Ordering::Relaxed)
     }
 
+    pub fn check_ack(&self) -> bool {
+        self.received_since_ack
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some((x + 1) % 60))
+            == Ok(0)
+    }
+
     pub fn send(&self, socket: &UdpSocket, content: PacketContent) -> anyhow::Result<()> {
         #[allow(clippy::cast_possible_truncation)]
         let packet = Packet {
-            timestamp: SystemTime::now().duration_since(self.established)?.as_micros() as u32,
+            timestamp: SystemTime::now()
+                .duration_since(self.established)?
+                .as_micros() as u32,
             dest_socket_id: self.peer_srt_socket_id,
             content,
         };

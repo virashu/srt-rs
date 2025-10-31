@@ -12,7 +12,12 @@ fn main() -> anyhow::Result<()> {
     let mut server = Server::new()?;
 
     server.on_connect(&|id| {
+        tracing::info!("Client connected: {id:?}");
         fs::write(format!("_local/stream_{id}.mpg"), []).unwrap();
+    });
+
+    server.on_disconnect(&|id| {
+        tracing::info!("Client disconnected: {id:?}");
     });
 
     server.on_data(&|id: &str, mpeg_packet: &[u8]| {

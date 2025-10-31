@@ -5,8 +5,11 @@ use std::{
 
 use crate::{
     connection::Connection,
-    ops::{handshake_v5, make_ack},
-    packet::{Packet, PacketContent, control::ControlPacketInfo},
+    ops::{handshake_v5, make_full_ack},
+    packet::{
+        Packet, PacketContent,
+        control::{ControlPacketInfo, ack::Ack},
+    },
 };
 
 type OnConnectHandler = dyn Fn(&str);
@@ -65,10 +68,19 @@ impl Server {
                 );
                 // println!(" => Payload: {:x?}", data.content);
 
-                let ack_n = conn.inc_ack();
-                let ack = make_ack(data, ack_n)?;
-                tracing::debug!("OUT: {ack:?}");
-                conn.send(&self.socket, ack)?;
+                // let ack_n = conn.inc_ack();
+                // let ack = make_full_ack(data, ack_n)?;
+                // tracing::debug!("OUT: {ack:?}");
+                // conn.send(&self.socket, ack)?;
+
+                if conn.check_ack() {
+                    conn.send(
+                        &self.socket,
+                        PacketContent::Control(ControlPacketInfo::Ack(Ack::Light {
+                            last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
+                        })),
+                    )?;
+                }
 
                 let stream_id = conn.stream_id.clone().unwrap_or_default();
                 let mpeg_packet = &data.content[..];
@@ -112,7 +124,6 @@ impl Server {
                 let Ok(conn) = handshake_v5(&self.socket) else {
                     continue;
                 };
-                tracing::info!(conn.stream_id);
                 if let Some(callback) = &self.on_connect {
                     let stream_id = conn.stream_id.clone().unwrap_or_default();
                     callback(&stream_id);

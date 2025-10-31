@@ -141,9 +141,9 @@ impl Handshake {
         if let Some(ext) = &self.key_material_extension {
             res.extend(ext.to_raw());
         }
-        if let Some(ext) = &self.stream_id_extension {
-            res.extend(ext.to_raw());
-        }
+        // if let Some(ext) = &self.stream_id_extension {
+        //     res.extend(ext.to_raw());
+        // }
 
         res
     }
