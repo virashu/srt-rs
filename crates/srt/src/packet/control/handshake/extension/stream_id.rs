@@ -27,8 +27,6 @@ impl StreamIdExtension {
     }
 
     pub fn to_raw(&self) -> Vec<u8> {
-        let mut res = Vec::new();
-
-        res
+        todo!()
     }
 }

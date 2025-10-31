@@ -1,4 +1,5 @@
 //! <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1>
+
 pub mod extension;
 
 use crate::{

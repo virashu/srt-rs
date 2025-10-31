@@ -143,7 +143,7 @@ pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
 
     Ok(Connection {
         stream_id,
-        est,
+        established: est,
         addr,
         peer_srt_socket_id: handshake.srt_socket_id,
         ack_counter: 1.into(),

@@ -1,3 +1,5 @@
+//! <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt>
+
 #![allow(clippy::missing_errors_doc)]
 #![forbid(clippy::print_stdout)]
 

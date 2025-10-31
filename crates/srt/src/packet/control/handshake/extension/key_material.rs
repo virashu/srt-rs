@@ -29,9 +29,9 @@ impl KeyMaterialExtension {
             _ => unreachable!(),
         };
         // let keki = u32::from_be_bytes(raw[8..12].try_into()?); // = 0
-        let cipher = u8::from_be_bytes(raw[12..13].try_into()?);
+        let _cipher = u8::from_be_bytes(raw[12..13].try_into()?);
         // let auth = u8::from_be_bytes(raw[13..14].try_into()?); // = 0
-        let stream_encapsulation = u8::from_be_bytes(raw[14..15].try_into()?);
+        let _stream_encapsulation = u8::from_be_bytes(raw[14..15].try_into()?);
 
         Ok(Self {
             r#type,
@@ -42,8 +42,6 @@ impl KeyMaterialExtension {
     }
 
     pub fn to_raw(&self) -> Vec<u8> {
-        let mut res = Vec::new();
-
-        res
+        todo!()
     }
 }

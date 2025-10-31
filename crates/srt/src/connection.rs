@@ -6,10 +6,9 @@ use std::{
 
 use crate::packet::{Packet, PacketContent};
 
-/// Maybe some config??
 pub struct Connection {
     pub stream_id: Option<String>,
-    pub est: SystemTime,
+    pub established: SystemTime,
     pub addr: SocketAddr,
     pub peer_srt_socket_id: u32,
     pub ack_counter: AtomicU32,
@@ -23,7 +22,7 @@ impl Connection {
     pub fn send(&self, socket: &UdpSocket, content: PacketContent) -> anyhow::Result<()> {
         #[allow(clippy::cast_possible_truncation)]
         let packet = Packet {
-            timestamp: SystemTime::now().duration_since(self.est)?.as_micros() as u32,
+            timestamp: SystemTime::now().duration_since(self.established)?.as_micros() as u32,
             dest_socket_id: self.peer_srt_socket_id,
             content,
         };

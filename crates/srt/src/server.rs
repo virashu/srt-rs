@@ -9,12 +9,16 @@ use crate::{
     packet::{Packet, PacketContent, control::ControlPacketInfo},
 };
 
+type OnConnectHandler = dyn Fn(&str);
+type OnDiscnnectHandler = dyn Fn(&str);
+type OnDataHandler = dyn Fn(&str, &[u8]);
+
 pub struct Server {
     socket: UdpSocket,
     connections: HashMap<SocketAddr, Connection>,
-    on_connect: Option<Box<dyn Fn(&str)>>,
-    on_disconnect: Option<Box<dyn Fn(&str)>>,
-    on_data: Option<Box<dyn Fn(&str, &[u8])>>,
+    on_connect: Option<Box<OnConnectHandler>>,
+    on_disconnect: Option<Box<OnDiscnnectHandler>>,
+    on_data: Option<Box<OnDataHandler>>,
 }
 
 impl Server {
@@ -30,15 +34,15 @@ impl Server {
         })
     }
 
-    pub fn on_connect(&mut self, f: &'static dyn Fn(&str)) {
+    pub fn on_connect(&mut self, f: &'static OnConnectHandler) {
         self.on_connect = Some(Box::new(f));
     }
 
-    pub fn on_disconnect(&mut self, f: &'static dyn Fn(&str)) {
+    pub fn on_disconnect(&mut self, f: &'static OnDiscnnectHandler) {
         self.on_disconnect = Some(Box::new(f));
     }
 
-    pub fn on_data(&mut self, f: &'static dyn Fn(&str, &[u8])) {
+    pub fn on_data(&mut self, f: &'static OnDataHandler) {
         self.on_data = Some(Box::new(f));
     }
 
