@@ -3,7 +3,9 @@ pub mod extensions;
 
 use crate::{
     macros::auto_try_from,
-    packet::control::handshake::extensions::{HandshakeExtension, handshake_extension_flags},
+    packet::control::handshake::extensions::{
+        HandshakeExtension, KeyMaterialExtension, StreamIdExtension, handshake_extension_flags,
+    },
 };
 
 auto_try_from! {
@@ -47,6 +49,8 @@ pub struct Handshake {
     pub syn_cookie: u32,
     pub peer_ip_address: (u32, u32, u32, u32),
     pub handshake_extension: Option<HandshakeExtension>,
+    pub key_material_extension: Option<KeyMaterialExtension>,
+    pub stream_id_extension: Option<StreamIdExtension>,
 }
 
 impl Handshake {
@@ -71,23 +75,28 @@ impl Handshake {
         );
 
         // Extensions
+        let mut ext_pad = 0;
 
         let handshake_extension = if extension_field & handshake_extension_flags::HSREQ != 0 {
-            println!("Hsreq");
+            ext_pad += 4 * 4;
             Some(HandshakeExtension::from_raw(&raw[48..])?)
         } else {
             None
         };
 
-        if (extension_field & handshake_extension_flags::KMREQ != 0)
+        let key_material_extension = if (extension_field & handshake_extension_flags::KMREQ != 0)
             && handshake_type != HandshakeType::Induction
         {
-            println!("Kmreq");
-        }
+            Some(KeyMaterialExtension::from_raw(&raw[(48 + ext_pad)..])?)
+        } else {
+            None
+        };
 
-        if extension_field & handshake_extension_flags::CONFIG != 0 {
-            println!("Config");
-        }
+        let stream_id_extension = if extension_field & handshake_extension_flags::CONFIG != 0 {
+            Some(StreamIdExtension::from_raw(&raw[(48 + ext_pad)..])?)
+        } else {
+            None
+        };
 
         Ok(Self {
             version,
@@ -101,6 +110,8 @@ impl Handshake {
             syn_cookie,
             peer_ip_address,
             handshake_extension,
+            key_material_extension,
+            stream_id_extension,
         })
     }
 
@@ -123,6 +134,12 @@ impl Handshake {
         res.extend(self.peer_ip_address.3.to_be_bytes());
 
         if let Some(ext) = &self.handshake_extension {
+            res.extend(ext.to_raw());
+        }
+        if let Some(ext) = &self.key_material_extension {
+            res.extend(ext.to_raw());
+        }
+        if let Some(ext) = &self.stream_id_extension {
             res.extend(ext.to_raw());
         }
 

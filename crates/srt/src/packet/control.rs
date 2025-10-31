@@ -48,7 +48,7 @@ impl ControlPacketInfo {
         Ok(match control_type {
             control_types::HANDSHAKE => Self::Handshake(Handshake::from_raw_cif(&raw[16..])?),
             control_types::KEEPALIVE => Self::KeepAlive,
-            control_types::ACK => todo!("Ack"),
+            control_types::ACK => Self::Ack(Ack::from_raw(raw)?),
             control_types::NAK => todo!("Nak"),
             control_types::CONGESTION_WARNING => todo!("CongestionWarning"),
             control_types::SHUTDOWN => Self::Shutdown,

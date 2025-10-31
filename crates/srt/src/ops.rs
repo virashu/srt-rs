@@ -12,7 +12,7 @@ use crate::{
 pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
     let mut buf = [0; 80];
 
-    println!("Waiting for a handshake...");
+    tracing::debug!("Waiting for a handshake...");
 
     //
     // Induction
@@ -21,7 +21,7 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
     let (n, addr) = socket.recv_from(&mut buf)?;
     let data = &buf[..n];
 
-    println!("Connection: {addr}");
+    tracing::debug!("Connection: {addr}");
 
     let in_packet = Packet::from_raw(data)?;
 
@@ -41,7 +41,7 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
 
     socket.send_to(&out_packet_v4.to_raw(), addr)?;
 
-    println!("Completed Induction");
+    tracing::debug!("Completed Induction");
 
     //
     // Conclusion
@@ -64,9 +64,9 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
 
     socket.send_to(&out_packet_v4.to_raw(), addr)?;
 
-    println!("Completed Conclusion");
+    tracing::debug!("Completed Conclusion");
 
-    println!("Done!");
+    tracing::debug!("Done!");
 
     Ok(())
 }
@@ -74,9 +74,9 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
 pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
     const MAGIC_CODE: u16 = 0x4A17;
 
-    let mut buf = [0; 80];
+    let mut buf = [0; 200];
 
-    println!("Waiting for a handshake...");
+    tracing::debug!("Waiting for a handshake...");
 
     //
     // Induction
@@ -85,7 +85,7 @@ pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
     let (n, addr) = socket.recv_from(&mut buf)?;
     let data = &buf[..n];
 
-    println!("Connection: {addr}");
+    tracing::debug!("Connection: {addr}");
 
     let in_packet = Packet::from_raw(data)?;
 
@@ -107,7 +107,7 @@ pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
 
     socket.send_to(&out_packet_v5.to_raw(), addr)?;
 
-    println!("Completed Induction");
+    tracing::debug!("Completed Induction");
 
     //
     // Conclusion
@@ -122,6 +122,11 @@ pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
         return Err(anyhow::anyhow!("Failed to unwrap handshake"));
     };
 
+    let stream_id = handshake
+        .stream_id_extension
+        .as_ref()
+        .map(|x| x.stream_id.clone());
+
     let out_packet_v5 = Packet {
         timestamp: in_packet.timestamp + 1,
         dest_socket_id: handshake.srt_socket_id,
@@ -130,22 +135,24 @@ pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {
 
     socket.send_to(&out_packet_v5.to_raw(), addr)?;
 
-    println!("Completed Conclusion");
+    tracing::debug!("Completed Conclusion");
 
     let est = SystemTime::now();
 
-    println!("Done!");
+    tracing::debug!("Done!");
 
     Ok(Connection {
+        stream_id,
         est,
         addr,
         peer_srt_socket_id: handshake.srt_socket_id,
+        ack_counter: 1.into(),
     })
 }
 
-pub fn make_ack(data: &DataPacketInfo, count: u32) -> anyhow::Result<PacketContent> {
+pub fn make_ack(data: &DataPacketInfo, ack_number: u32) -> anyhow::Result<PacketContent> {
     Ok(PacketContent::Control(ControlPacketInfo::Ack(Ack {
-        ack_number: count,
+        ack_number,
         last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
         rtt: 0,
         rtt_variance: 0,
