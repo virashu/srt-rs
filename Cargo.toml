@@ -2,6 +2,7 @@
 name = "rs-srt"
 version = "0.1.0"
 edition = "2024"
+default-run = "rs-srt"
 
 [dependencies]
 anyhow = "1.0.100"
