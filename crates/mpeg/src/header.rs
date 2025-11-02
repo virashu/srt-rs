@@ -63,33 +63,36 @@ impl AdaptationField {
         let elementary_stream_priority_indicator = raw[5] & (1 << 5) != 0;
         let flags = raw[5] & 0b0001_1111;
 
-        let mut start_bit: usize = 6 * 8;
+        let mut bit_offset: usize = 48;
 
         let pcr = if flags & (1 << 4) != 0 {
-            start_bit += 42;
-            Some(from_bits::<u64>(raw, start_bit, 42))
+            let r = Some(from_bits::<u64>(raw, bit_offset, 42));
+            bit_offset += 42;
+            r
         } else {
             None
         };
         let opcr = if flags & (1 << 3) != 0 {
-            start_bit += 42;
-            Some(from_bits::<u64>(raw, start_bit, 42))
+            let r = Some(from_bits::<u64>(raw, bit_offset, 42));
+            bit_offset += 42;
+            r
         } else {
             None
         };
         let splice_countdown = if flags & (1 << 2) != 0 {
-            start_bit += 8;
-            Some(from_bits::<u8>(raw, start_bit, 8))
+            let r = Some(from_bits::<u8>(raw, bit_offset, 8));
+            bit_offset += 8;
+            r
         } else {
             None
         };
         let transport_private_data = if flags & (1 << 1) != 0 {
-            start_bit += 8;
-            let len = from_bits::<u8>(raw, start_bit, 8);
-            start_bit += usize::from(len);
+            let len = from_bits::<u8>(raw, bit_offset, 8);
+            bit_offset += 8;
             tracing::warn!(
                 "Not implemented yet: mpeg::header::AdaptationField::from_raw.transport_private_data"
             );
+            bit_offset += usize::from(len);
             None
         } else {
             None

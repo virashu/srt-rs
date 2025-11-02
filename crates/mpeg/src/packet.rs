@@ -10,10 +10,15 @@ impl Packet {
     pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
         let header = Header::from_raw(raw)?;
 
-        if header.payload_unit_start_indicator {
-            // Contains PES or PSI
-        }
+        let payload_body = &raw[header.size()..];
 
-        let payload = todo!();
+        let payload = if header.payload_unit_start_indicator {
+            // Contains PES or PSI
+            Payload::pes_from_raw(payload_body)?
+        } else {
+            Payload::Data(Vec::from(payload_body))
+        };
+
+        Ok(Self { header, payload })
     }
 }

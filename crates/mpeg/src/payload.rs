@@ -10,6 +10,6 @@ pub enum Payload {
 
 impl Payload {
     pub fn pes_from_raw(raw: &[u8]) -> anyhow::Result<Self> {
-        todo!()
+        Ok(Self::Pes(PesPacket::from_raw(raw)?))
     }
 }

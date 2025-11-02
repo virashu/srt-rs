@@ -14,5 +14,24 @@ pub struct PesPacket {
 }
 
 impl PesPacket {
-    
+    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+        let stream_id = raw[3];
+        let pes_packet_length = u16::from_be_bytes(raw[4..6].try_into()?);
+
+        let pes_header = if raw[6] & 0b1100_0000 == 0b1000_0000 {
+            Some(PesHeader::from_raw(&raw[6..])?)
+        } else {
+            None
+        };
+
+        let data_start = 6 + pes_header.as_ref().map_or(0, PesHeader::size);
+        let pes_data = Vec::from(&raw[data_start..]);
+
+        Ok(Self {
+            stream_id,
+            pes_packet_length,
+            pes_header,
+            pes_data,
+        })
+    }
 }
