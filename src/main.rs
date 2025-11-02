@@ -1,4 +1,6 @@
-use mpeg::{packet::Packet as MpegPacket, payload::Payload, pes_packet::PesPacket};
+use mpeg::{
+    payload::Payload, pes_packet::PesPacket, transport_packet::TransportPacket as MpegPacket,
+};
 use srt::server::Server as SrtServer;
 
 fn run_hls() -> anyhow::Result<()> {
@@ -34,19 +36,23 @@ fn main() -> anyhow::Result<()> {
 
         let pack = MpegPacket::from_raw(mpeg_packet).unwrap();
 
-        match pack.header.packet_id {
-            0x000 => tracing::info!("PAT"),
-            0x100 => tracing::info!("Video"),
-            0x101 => tracing::info!("Audio"),
-            n => tracing::info!("0x{n:X}"),
-        }
+        // match pack.header.packet_id {
+        //     0x000 => tracing::info!("PAT"),
+        //     0x100 => tracing::info!("Video"),
+        //     0x101 => tracing::info!("Audio"),
+        //     n => tracing::info!("0x{n:X}"),
+        // }
 
-        if let Payload::Pes(PesPacket {
-            pes_header: Some(header),
-            ..
-        }) = pack.payload
-        {
-            tracing::info!("{:#x?}", header);
+        if let Some(Payload::Pes(pack)) = pack.payload {
+            if let PesPacket {
+                pes_header: Some(header),
+                ..
+            } = pack
+            {
+                tracing::info!("{:#x?}", header);
+            } else {
+                tracing::info!("PES witout header");
+            }
         }
     });
 
