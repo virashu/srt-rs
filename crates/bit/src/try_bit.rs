@@ -12,9 +12,15 @@ macro_rules! impl_try_bit_for_scalar {
     ( $type:ident ) => {
         impl TryBit for $type {
             fn try_bit(&self, index: usize) -> Result<bool, crate::Error> {
+                use std::convert::TryInto;
+
                 let max_shift = size_of::<$type>() * 8 - 1;
-                let shift = max_shift.checked_sub(index).ok_or(crate::Error {})?;
-                let shifted = self.checked_shr(shift as u32).ok_or(crate::Error {})?;
+                let shift = max_shift
+                    .checked_sub(index)
+                    .ok_or(crate::Error {})?
+                    .try_into()
+                    .map_err(|_e| crate::Error {})?;
+                let shifted = self.checked_shr(shift).ok_or(crate::Error {})?;
                 Ok(shifted & 1 != 0)
             }
         }
