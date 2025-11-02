@@ -12,6 +12,7 @@ use crate::{
 
 auto_try_from! {
     #[repr(u16)]
+    /// <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1> (Table 2)
     #[derive(Clone, Copy, Debug)]
     pub enum HandshakeEncryption {
         NoEncryption = 0,
@@ -23,6 +24,7 @@ auto_try_from! {
 
 auto_try_from! {
     #[repr(u32)]
+    /// <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1> (Table 4)
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub enum HandshakeType {
         Done = 0xFF_FF_FF_FD,
@@ -38,6 +40,8 @@ auto_try_from! {
 /// `Control Information Field` of `Handshake`
 ///
 /// [ 48 BYTES (+ Extensions) ]
+///
+/// <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1> (Figure 5)
 #[derive(Clone, Debug)]
 pub struct Handshake {
     pub version: u32,

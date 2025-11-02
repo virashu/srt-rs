@@ -23,8 +23,9 @@ fn main() -> anyhow::Result<()> {
         let id = conn.stream_id.clone().unwrap_or_default();
 
         let mut file = fs::OpenOptions::new()
+            .create(true)
             .append(true)
-            .open(format!("_local/stream_{id}/.ts"))
+            .open(format!("_local/stream_{id}.mpg"))
             .unwrap();
 
         file.write_all(mpeg_packet).unwrap();
