@@ -1,6 +1,5 @@
-use mpeg::packet::Packet as MpegPacket;
+use mpeg::header::Header as MpegHeader;
 use srt::server::Server as SrtServer;
-use tracing::Level;
 
 fn run_hls() -> anyhow::Result<()> {
     tracing::info!("Starting HLS");
@@ -10,7 +9,9 @@ fn run_hls() -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    tracing_subscriber::fmt()
+        .with_env_filter("info;mpeg=off")
+        .init();
 
     let mut srt_server = SrtServer::new()?;
 
@@ -31,7 +32,7 @@ fn main() -> anyhow::Result<()> {
     srt_server.on_data(&|conn, mpeg_packet| {
         let id = conn.stream_id.clone().unwrap_or_default();
 
-        let pack = MpegPacket::from_raw(mpeg_packet).unwrap();
+        let pack = MpegHeader::from_raw(mpeg_packet).unwrap();
 
         match pack.packet_id {
             0x000 => println!("PAT"),
