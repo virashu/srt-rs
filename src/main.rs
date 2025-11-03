@@ -1,7 +1,12 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU32, Ordering},
+    },
+    time::{Duration, Instant},
+};
 
 use mpeg::{
-    constants::packet_ids::PROGRAM_ASSOCIATION_TABLE,
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
@@ -33,21 +38,27 @@ fn main() -> anyhow::Result<()> {
         );
     });
 
-    let known_pids = Arc::new(Mutex::new(Vec::new()));
+    // let n_packs_srt = AtomicU32::new(0);
+    // let n_packs_mpeg = AtomicU32::new(0);
+    // let timer = Arc::new(Mutex::new(Instant::now()));
+    let pids_pmt = Arc::new(Mutex::new(Vec::new()));
 
     let on_data = move |conn: &Connection, mpeg_data: &[u8]| {
         let id = conn.stream_id.clone().unwrap_or_default();
         // tracing::info!("Packet from {id}");
 
+        // n_packs_srt.fetch_add(1, Ordering::Relaxed);
+        // n_packs_mpeg.fetch_add((mpeg_data.len() / 188) as u32, Ordering::Relaxed);
+
         for chunk in mpeg_data.chunks_exact(188) {
-            let pack = MpegPacket::from_raw(chunk, &known_pids.lock().unwrap()).unwrap();
+            let pack = MpegPacket::from_raw(chunk, &pids_pmt.lock().unwrap()).unwrap();
 
             if let Some(Payload::PSI(ProgramSpecificInformation {
                 section: Section::PAS(table),
                 ..
             })) = &pack.payload
             {
-                let mut lock = known_pids.lock().unwrap();
+                let mut lock = pids_pmt.lock().unwrap();
 
                 for assoc in &table.programs {
                     if !lock.contains(&assoc.program_id) {
@@ -56,23 +67,28 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
-            // if pack.header.packet_id == PROGRAM_ASSOCIATION_TABLE {
-            //     tracing::info!("{pack:#?}");
-            // } else if pack.header.packet_id == 0x1000 {
-            //     tracing::info!("{pack:#?}");
-            // }
-
             // match pack.header.packet_id {
             //     // System
             //     0x0000 => tracing::info!("PAT"),
-            //     0x1000 => tracing::info!("PMT"),
+
             //     // User
             //     0x0100 => tracing::info!("Video"),
             //     0x0101 => tracing::info!("Audio"),
 
-            //     n => tracing::info!("0x{n:X}"),
+            //     // Dynamically-assigned PMT
+            //     n if pids_pmt.lock().unwrap().contains(&n) => tracing::info!("PMT"),
+
+            //     n => tracing::info!("Other: 0x{n:X}"),
             // }
         }
+
+        // {
+        //     let mut timer = timer.lock().unwrap();
+        //     if timer.elapsed() > Duration::from_secs(1) {
+        //         *timer = Instant::now();
+        //         tracing::info!("SRT:\t{} p/s | MPEG-TS:\t{} p/s", n_packs_srt.swap(0, Ordering::Relaxed), n_packs_mpeg.swap(0, Ordering::Relaxed));
+        //     }
+        // }
     };
 
     let on_data: &'static _ = Box::leak(Box::new(on_data));
