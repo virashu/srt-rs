@@ -52,12 +52,11 @@ impl Server {
     fn handle(&self, conn: &Connection, pack: &Packet) -> anyhow::Result<()> {
         match &pack.content {
             PacketContent::Control(control) => {
-                tracing::debug!("IN: Control: {control:?}");
+                tracing::trace!("srt | inbound | control | {control:?}");
             }
             PacketContent::Data(data) => {
-                // println!("{data:?}");
-                tracing::debug!(
-                    "IN: Data {{ packet_sequence_number: {:?}, position: {:?}, order: {:?}, encryption: {:?}, retransmitted: {:?}, message_number: {:?}, length: {:?} }}",
+                tracing::trace!(
+                    "srt | inbound | data | Data {{ packet_sequence_number: {:?}, position: {:?}, order: {:?}, encryption: {:?}, retransmitted: {:?}, message_number: {:?}, length: {:?} }}",
                     data.packet_sequence_number,
                     data.position,
                     data.order,
@@ -66,12 +65,6 @@ impl Server {
                     data.message_number,
                     data.content.len()
                 );
-                // println!(" => Payload: {:x?}", data.content);
-
-                // let ack_n = conn.inc_ack();
-                // let ack = make_full_ack(data, ack_n)?;
-                // tracing::debug!("OUT: {ack:?}");
-                // conn.send(&self.socket, ack)?;
 
                 if conn.check_ack() {
                     conn.send(
