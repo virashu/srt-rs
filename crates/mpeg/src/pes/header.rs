@@ -1,4 +1,4 @@
-use bit::{Bit, Bits, from_bits};
+use bit::{Bit, Bits};
 
 #[derive(Clone, Debug)]
 pub struct PesExtension {
@@ -156,10 +156,10 @@ impl PesHeader {
             .then(|| raw[offset..].bits::<u16>(0, 16))
             .inspect(|_| offset += 2);
 
-        let pes_extension = raw[1]
-            .bit(7)
-            .then(|| PesExtension::from_raw(&raw[offset..]))
-            .transpose()?;
+        // let pes_extension = raw[1]
+        //     .bit(7)
+        //     .then(|| PesExtension::from_raw(&raw[offset..]))
+        //     .transpose()?;
 
         Ok(Self {
             pes_scrambling_control,

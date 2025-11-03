@@ -1,7 +1,11 @@
+use std::sync::{Arc, Mutex};
+
 use mpeg::{
-    payload::Payload, pes_packet::PesPacket, transport_packet::TransportPacket as MpegPacket,
+    constants::packet_ids::PROGRAM_ASSOCIATION_TABLE,
+    psi::packet::{ProgramSpecificInformation, Section},
+    transport::packet::{Payload, TransportPacket as MpegPacket},
 };
-use srt::server::Server as SrtServer;
+use srt::{connection::Connection, server::Server as SrtServer};
 
 fn run_hls() -> anyhow::Result<()> {
     tracing::info!("Starting HLS");
@@ -29,32 +33,50 @@ fn main() -> anyhow::Result<()> {
         );
     });
 
-    srt_server.on_data(&|conn, mpeg_packet| {
+    let known_pids = Arc::new(Mutex::new(Vec::new()));
+
+    let on_data = move |conn: &Connection, mpeg_data: &[u8]| {
         let id = conn.stream_id.clone().unwrap_or_default();
+        // tracing::info!("Packet from {id}");
 
-        let pack = MpegPacket::from_raw(mpeg_packet).unwrap();
+        for chunk in mpeg_data.chunks_exact(188) {
+            let pack = MpegPacket::from_raw(chunk, &known_pids.lock().unwrap()).unwrap();
 
-        tracing::info!("{pack:#?}");
+            if let Some(Payload::PSI(ProgramSpecificInformation {
+                section: Section::PAS(table),
+                ..
+            })) = &pack.payload
+            {
+                let mut lock = known_pids.lock().unwrap();
 
-        // match pack.header.packet_id {
-        //     0x000 => tracing::info!("PAT"),
-        //     0x100 => tracing::info!("Video"),
-        //     0x101 => tracing::info!("Audio"),
-        //     n => tracing::info!("0x{n:X}"),
-        // }
+                for assoc in &table.programs {
+                    if !lock.contains(&assoc.program_id) {
+                        lock.push(assoc.program_id);
+                    }
+                }
+            }
 
-        // if let Some(Payload::Pes(pack)) = pack.payload {
-        //     if let PesPacket {
-        //         pes_header: Some(header),
-        //         ..
-        //     } = pack
-        //     {
-        //         tracing::info!("{:#x?}", header);
-        //     } else {
-        //         tracing::info!("PES witout header");
-        //     }
-        // }
-    });
+            // if pack.header.packet_id == PROGRAM_ASSOCIATION_TABLE {
+            //     tracing::info!("{pack:#?}");
+            // } else if pack.header.packet_id == 0x1000 {
+            //     tracing::info!("{pack:#?}");
+            // }
+
+            // match pack.header.packet_id {
+            //     // System
+            //     0x0000 => tracing::info!("PAT"),
+            //     0x1000 => tracing::info!("PMT"),
+            //     // User
+            //     0x0100 => tracing::info!("Video"),
+            //     0x0101 => tracing::info!("Audio"),
+
+            //     n => tracing::info!("0x{n:X}"),
+            // }
+        }
+    };
+
+    let on_data: &'static _ = Box::leak(Box::new(on_data));
+    srt_server.on_data(on_data);
 
     tracing::info!("Starting SRT");
     srt_server.run()?;

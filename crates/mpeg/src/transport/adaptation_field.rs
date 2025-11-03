@@ -1,6 +1,6 @@
-use bit::{Bit, Bits, from_bits};
+use bit::Bit;
 
-use crate::adaptation_field_extension::AdaptationFieldExtension;
+use crate::transport::adaptation_field_extension::AdaptationFieldExtension;
 
 #[derive(Debug)]
 pub struct AdaptationFieldContent {}
@@ -45,18 +45,18 @@ impl AdaptationField {
 
         let splice_countdown = flags.bit(5).then(|| raw[offset]).inspect(|_| offset += 1);
 
-        let transport_private_data = flags.bit(6).then(|| {
-            let len = raw[offset] as usize;
-            offset += 1;
-            let data = Vec::from(&raw[offset..(offset + len)]);
-            offset += len;
-            data
-        });
+        // let transport_private_data = flags.bit(6).then(|| {
+        //     let len = raw[offset] as usize;
+        //     offset += 1;
+        //     let data = Vec::from(&raw[offset..(offset + len)]);
+        //     offset += len;
+        //     data
+        // });
 
-        let adaptation_field_extension = flags
-            .bit(7)
-            .then(|| AdaptationFieldExtension::from_raw(&raw[offset..]))
-            .transpose()?;
+        // let adaptation_field_extension = flags
+        //     .bit(7)
+        //     .then(|| AdaptationFieldExtension::from_raw(&raw[offset..]))
+        //     .transpose()?;
 
         Ok(Self {
             adaptation_field_length,
@@ -66,8 +66,8 @@ impl AdaptationField {
             pcr,
             opcr,
             splice_countdown,
-            transport_private_data,
-            adaptation_field_extension,
+            transport_private_data: None,
+            adaptation_field_extension: None,
         })
     }
 

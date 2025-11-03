@@ -1,0 +1,57 @@
+pub mod stream_ids {
+    pub const PROGRAM_STREAM_MAP: u8 = 0b1011_1100;
+    pub const PRIVATE_STREAM_1: u8 = 0b1011_1101;
+    pub const PADDING_STREAM: u8 = 0b1011_1110;
+    pub const PRIVATE_STREAM_2: u8 = 0b1011_1111;
+
+    pub const ECM_STREAM: u8 = 0b1111_0000;
+    pub const EMM_STREAM: u8 = 0b1111_0001;
+
+    pub const PROGRAM_STREAM_DIRECTORY: u8 = 0b1111_1111;
+    pub const DSMCC_STREAM: u8 = 0b1111_0010;
+
+    pub const ITU_T_REC_H2221_TYPE_E_STREAM: u8 = 0b1111_1000;
+
+    pub const GROUP_NO_HEADER: &[u8] = &[
+        PROGRAM_STREAM_MAP,
+        PRIVATE_STREAM_1,
+        PADDING_STREAM,
+        PRIVATE_STREAM_2,
+        ECM_STREAM,
+        EMM_STREAM,
+        PROGRAM_STREAM_DIRECTORY,
+        DSMCC_STREAM,
+        ITU_T_REC_H2221_TYPE_E_STREAM,
+    ];
+}
+
+pub mod packet_ids {
+    pub const PROGRAM_ASSOCIATION_TABLE: u16 = 0x0000;
+    pub const CONDITIONAL_ACCESS_TABLE: u16 = 0x0001;
+    pub const TRANSPORT_STREAM_DESCRIPTION_TABLE: u16 = 0x0002;
+    pub const IPMP_CONTROL_INFORMATION_TABLE: u16 = 0x0003;
+
+    pub const GROUP_CONTROL: &[u16] = &[
+        PROGRAM_ASSOCIATION_TABLE,
+        CONDITIONAL_ACCESS_TABLE,
+        TRANSPORT_STREAM_DESCRIPTION_TABLE,
+        IPMP_CONTROL_INFORMATION_TABLE,
+    ];
+}
+
+pub mod table_ids {
+    pub const PROGRAM_ASSOCIATION_SECTION: u8 = 0x00;
+    pub const CONDITIONAL_ACCESS_SECTION: u8 = 0x01;
+    pub const TS_PROGRAM_MAP_SECTION: u8 = 0x02;
+    pub const TS_DESCRIPTION_SECTION: u8 = 0x03;
+    pub const SCENE_DESCRIPTION: u8 = 0x04;
+    pub const OBJECT_DESCRIPTION: u8 = 0x05;
+
+    // 0x04 ISO_IEC_14496_scene_description_section
+    // 0x05 ISO_IEC_14496_object_descriptor_section
+    // 0x06 Metadata_section
+    // 0x07 IPMP_Control_Information_section (defined in ISO/IEC 13818-11)
+    // 0x08-0x3F ITU-T Rec. H.222.0 | ISO/IEC 13818-1 reserved
+    // 0x40-0xFE User private
+    // 0xFF Forbidden
+}

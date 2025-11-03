@@ -1,0 +1,38 @@
+use crate::{constants::stream_ids::GROUP_NO_HEADER, pes::header::PesHeader};
+
+/// 3B+
+#[derive(Debug)]
+pub struct PesPacket {
+    // 24b prefix
+    /// 8b
+    pub stream_id: u8,
+    /// 16b
+    pub pes_packet_length: u16,
+    /// n?
+    pub pes_header: Option<PesHeader>,
+    /// n
+    pub pes_data: Vec<u8>,
+}
+
+impl PesPacket {
+    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+        let stream_id = raw[3];
+        let pes_packet_length = u16::from_be_bytes(raw[4..6].try_into()?);
+
+        let pes_header = (!GROUP_NO_HEADER.contains(&stream_id))
+            .then(|| PesHeader::from_raw(&raw[6..]))
+            .transpose()?;
+
+        let data_start = 6 + pes_header
+            .as_ref()
+            .map_or(0, super::header::PesHeader::size);
+        let pes_data = Vec::from(&raw[data_start..]);
+
+        Ok(Self {
+            stream_id,
+            pes_packet_length,
+            pes_header,
+            pes_data,
+        })
+    }
+}

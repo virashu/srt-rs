@@ -7,14 +7,7 @@
 //
 use bit::Bit;
 
-pub enum Pid {
-    PAT,
-    CAT,
-    TSDT,
-    ICIT,
-}
-
-/// 32b
+/// 4B
 #[derive(Debug)]
 pub struct Header {
     // 8b sync byte
@@ -44,8 +37,8 @@ impl Header {
         let payload_unit_start_indicator = raw[1].bit(1);
         let transport_priority = raw[1].bit(2);
         let packet_id = u16::from_be_bytes(raw[1..3].try_into()?) & 0b0001_1111_1111_1111;
-        let transport_scrambling_control = raw[3] & 0b1100_0000 >> 6;
-        let adaptation_field_control = raw[3] & 0b0011_0000 >> 4;
+        let transport_scrambling_control = (raw[3] & 0b1100_0000) >> 6;
+        let adaptation_field_control = (raw[3] & 0b0011_0000) >> 4;
         let continuity_counter = raw[3] & 0b0000_1111;
 
         Ok(Self {
