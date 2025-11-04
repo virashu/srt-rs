@@ -37,15 +37,15 @@ impl Server {
         })
     }
 
-    pub fn on_connect(&mut self, f: &'static OnConnectHandler) {
+    pub fn on_connect(&mut self, f: impl Fn(&Connection) + 'static) {
         self.on_connect = Some(Box::new(f));
     }
 
-    pub fn on_disconnect(&mut self, f: &'static OnDiscnnectHandler) {
+    pub fn on_disconnect(&mut self, f: impl Fn(&Connection) + 'static) {
         self.on_disconnect = Some(Box::new(f));
     }
 
-    pub fn on_data(&mut self, f: &'static OnDataHandler) {
+    pub fn on_data(&mut self, f: impl Fn(&Connection, &[u8]) + 'static) {
         self.on_data = Some(Box::new(f));
     }
 

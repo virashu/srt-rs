@@ -8,18 +8,18 @@ fn main() -> anyhow::Result<()> {
 
     let mut srt_server = Server::new()?;
 
-    srt_server.on_connect(&|conn| {
+    srt_server.on_connect(|conn| {
         let id = conn.stream_id.clone().unwrap_or_default();
         tracing::info!("Client connected: {id:?}");
         fs::write(format!("_local/stream_{id}.mpg"), []).unwrap();
     });
 
-    srt_server.on_disconnect(&|conn| {
+    srt_server.on_disconnect(|conn| {
         let id = conn.stream_id.clone().unwrap_or_default();
         tracing::info!("Client disconnected: {id:?}");
     });
 
-    srt_server.on_data(&|conn, mpeg_packet| {
+    srt_server.on_data(|conn, mpeg_packet| {
         let id = conn.stream_id.clone().unwrap_or_default();
 
         let mut file = fs::OpenOptions::new()

@@ -13,7 +13,7 @@ use mpeg::{
 };
 use srt::{connection::Connection, server::Server as SrtServer};
 
-const SECONDS_PER_SEGMENT: u64 = 8;
+const SECONDS_PER_SEGMENT: u64 = 2;
 
 fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyhow::Result<()> {
     let timer = Rc::new(RefCell::new(0u64));

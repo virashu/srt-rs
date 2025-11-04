@@ -20,14 +20,14 @@ fn main() -> anyhow::Result<()> {
 
     let mut srt_server = SrtServer::new()?;
 
-    srt_server.on_connect(&|conn| {
+    srt_server.on_connect(|conn| {
         tracing::info!(
             "Client connected: {:?}",
             conn.stream_id.clone().unwrap_or_default()
         );
     });
 
-    srt_server.on_disconnect(&|conn| {
+    srt_server.on_disconnect(|conn| {
         tracing::info!(
             "Client disconnected: {:?}",
             conn.stream_id.clone().unwrap_or_default()
@@ -71,7 +71,6 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
-    let on_data: &'static _ = Box::leak(Box::new(on_data));
     srt_server.on_data(on_data);
 
     tracing::info!("Starting SRT");
