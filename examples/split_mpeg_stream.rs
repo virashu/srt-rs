@@ -4,7 +4,6 @@ use std::{
     io::Write,
     rc::Rc,
     sync::{Arc, Mutex},
-    thread,
 };
 
 use mpeg::{
@@ -13,18 +12,31 @@ use mpeg::{
 };
 use srt::{connection::Connection, server::Server as SrtServer};
 
-fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt().with_env_filter("info").init();
+
+    fs::remove_dir_all("_local").unwrap();
+    fs::create_dir_all("_local").unwrap();
+
     let mut srt_server = SrtServer::new()?;
 
+    srt_server.on_connect(&|conn| {
+        tracing::info!(
+            "Client connected: {:?}",
+            conn.stream_id.clone().unwrap_or_default()
+        );
+    });
+
+    srt_server.on_disconnect(&|conn| {
+        tracing::info!(
+            "Client disconnected: {:?}",
+            conn.stream_id.clone().unwrap_or_default()
+        );
+    });
+
     let segment_s = Rc::new(RefCell::new(0u64));
+    let segment = Rc::new(RefCell::new(0u64));
     let pids_pmt = Arc::new(Mutex::new(Vec::new()));
-
-    let on_disconnect = move |_: &Connection| {
-        *is_ended.lock().unwrap() = true;
-    };
-    let on_disconnect: &'static _ = Box::leak(Box::new(on_disconnect));
-
-    srt_server.on_disconnect(on_disconnect);
 
     let on_data = move |_: &Connection, mpeg_data: &[u8]| {
         for chunk in mpeg_data.chunks_exact(188) {
@@ -38,7 +50,7 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
                     ..
                 }))
             ) {
-                *current_segment.lock().unwrap() = *segment_s.borrow();
+                segment.replace(*segment_s.borrow());
             }
 
             if pack.header.packet_id == 0x100
@@ -52,10 +64,7 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(format!(
-                    "_local/segment_{}.mpg",
-                    *current_segment.lock().unwrap()
-                ))
+                .open(format!("_local/segment_{}.mpg", segment.borrow()))
                 .unwrap();
 
             file.write_all(chunk).unwrap();
@@ -67,28 +76,6 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
 
     tracing::info!("Starting SRT");
     srt_server.run()?;
-
-    Ok(())
-}
-
-fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_env_filter("info").init();
-
-    fs::remove_dir_all("_local").unwrap();
-    fs::create_dir_all("_local").unwrap();
-
-    // State
-    let current_segment = Arc::new(Mutex::new(0u64));
-    let is_ended = Arc::new(Mutex::new(false));
-
-    thread::spawn({
-        let current_segment = current_segment.clone();
-        let is_ended = is_ended.clone();
-
-        || run_srt(current_segment, is_ended).unwrap()
-    });
-
-    hls::run(current_segment, is_ended);
 
     Ok(())
 }

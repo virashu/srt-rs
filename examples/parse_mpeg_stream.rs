@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU32, Ordering},
-    },
-    time::{Duration, Instant},
-};
+use std::sync::{Arc, Mutex};
 
 use mpeg::{
     psi::packet::{ProgramSpecificInformation, Section},
@@ -31,17 +25,11 @@ fn main() -> anyhow::Result<()> {
         );
     });
 
-    // let n_packs_srt = AtomicU32::new(0);
-    // let n_packs_mpeg = AtomicU32::new(0);
-    // let timer = Arc::new(Mutex::new(Instant::now()));
     let pids_pmt = Arc::new(Mutex::new(Vec::new()));
 
     let on_data = move |conn: &Connection, mpeg_data: &[u8]| {
         let id = conn.stream_id.clone().unwrap_or_default();
         tracing::info!("Packet from {id:?}");
-
-        // n_packs_srt.fetch_add(1, Ordering::Relaxed);
-        // n_packs_mpeg.fetch_add((mpeg_data.len() / 188) as u32, Ordering::Relaxed);
 
         for chunk in mpeg_data.chunks_exact(188) {
             let pack = MpegPacket::from_raw(chunk, &pids_pmt.lock().unwrap()).unwrap();
@@ -75,17 +63,6 @@ fn main() -> anyhow::Result<()> {
                 n => tracing::info!("Other: 0x{n:X}"),
             }
         }
-
-        // {
-        //     let mut timer = timer.lock().unwrap();
-        //     if timer.elapsed() > Duration::from_secs(1) {
-        //         *timer = Instant::now();
-        //         tracing::info!(
-        //             "Bitrate: {} Kbps (raw)",
-        //             n_packs_mpeg.swap(0, Ordering::Relaxed) * 188 * 8 / 1000
-        //         );
-        //     }
-        // }
     };
 
     let on_data: &'static _ = Box::leak(Box::new(on_data));
