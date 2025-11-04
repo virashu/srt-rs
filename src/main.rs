@@ -3,7 +3,10 @@ use std::{
     fs,
     io::Write,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     thread,
 };
 
@@ -11,22 +14,29 @@ use mpeg::{
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
-use srt::{connection::Connection, server::Server as SrtServer};
+use srt::server::Server as SrtServer;
 
 const SECONDS_PER_SEGMENT: u64 = 2;
 
-fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyhow::Result<()> {
+fn run_srt(current_segment: Arc<AtomicU64>, is_ended: Arc<AtomicBool>) -> anyhow::Result<()> {
     let timer = Rc::new(RefCell::new(0u64));
     let current_segment_data = Rc::new(RefCell::new(Vec::<u8>::new()));
 
     let mut srt_server = SrtServer::new()?;
 
-    let on_disconnect: &'static _ = Box::leak(Box::new(move |_: &Connection| {
-        *is_ended.lock().unwrap() = true;
-    }));
-    srt_server.on_disconnect(on_disconnect);
+    srt_server.on_connect(|conn| {
+        let id = conn.stream_id.clone().unwrap_or_default();
+        tracing::info!("Stream started: {id:?}");
+        fs::write(format!("_local/stream_{id}.mpg"), []).unwrap();
+    });
 
-    let on_data = move |_: &Connection, mpeg_data: &[u8]| {
+    srt_server.on_disconnect(move |conn| {
+        let id = conn.stream_id.clone().unwrap_or_default();
+        tracing::info!("Stream ended: {id:?}");
+        is_ended.store(true, Ordering::Relaxed);
+    });
+
+    srt_server.on_data(move |_, mpeg_data| {
         for chunk in mpeg_data.chunks_exact(188) {
             let pack = MpegPacket::from_raw(chunk, &[]).unwrap();
 
@@ -39,22 +49,21 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
                 }))
             ) {
                 let new_segment = *timer.borrow() / SECONDS_PER_SEGMENT;
-                let mut current_segment = current_segment.lock().unwrap();
+                let old_segment = current_segment.swap(new_segment, Ordering::Relaxed);
 
                 // Flush
-                if *current_segment != new_segment {
-                    tracing::info!("segment-write {current_segment}");
+                if old_segment != new_segment {
+                    tracing::info!("segment-write {old_segment}");
                     fs::OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open(format!("_local/segment_{current_segment}.mpg"))
+                        .open(format!("_local/segment_{old_segment}.mpg"))
                         .unwrap()
                         .write_all(&current_segment_data.borrow())
                         .unwrap();
+
                     current_segment_data.borrow_mut().clear();
                 }
-
-                *current_segment = new_segment;
             }
 
             // If packet is Video (OBS)
@@ -67,12 +76,8 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
 
             current_segment_data.borrow_mut().extend(chunk);
         }
-    };
+    });
 
-    let on_data: &'static _ = Box::leak(Box::new(on_data));
-    srt_server.on_data(on_data);
-
-    tracing::info!("Starting SRT");
     srt_server.run()?;
 
     Ok(())
@@ -85,9 +90,10 @@ fn main() -> anyhow::Result<()> {
     fs::create_dir_all("_local").unwrap();
 
     // State
-    let current_segment = Arc::new(Mutex::new(0u64));
-    let is_ended = Arc::new(Mutex::new(false));
+    let current_segment = Arc::new(AtomicU64::new(0));
+    let is_ended = Arc::new(AtomicBool::new(false));
 
+    tracing::info!("Starting SRT");
     thread::spawn({
         let current_segment = current_segment.clone();
         let is_ended = is_ended.clone();
@@ -95,7 +101,8 @@ fn main() -> anyhow::Result<()> {
         || run_srt(current_segment, is_ended).unwrap()
     });
 
-    hls::run(SECONDS_PER_SEGMENT, current_segment, is_ended);
+    tracing::info!("Starting HLS");
+    hls::run(SECONDS_PER_SEGMENT, current_segment, is_ended)?;
 
     Ok(())
 }

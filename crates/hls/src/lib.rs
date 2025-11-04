@@ -1,7 +1,10 @@
 use std::{
     fmt::Write,
     fs,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
 };
 
 use axum::{
@@ -56,8 +59,8 @@ fn read_playlist(segment_size: u64, _current_segment: u64, is_ended: bool) -> St
 
 async fn get_playlist(State(state): State<AppState>) -> impl IntoResponse {
     let segment_size = state.segment_size;
-    let current_segment = { *state.current_segment.lock().unwrap() };
-    let is_ended = { *state.is_ended.lock().unwrap() };
+    let current_segment = state.current_segment.load(Ordering::Relaxed);
+    let is_ended = state.is_ended.load(Ordering::Relaxed);
 
     Response::builder()
         .header(CONTENT_TYPE, "application/vnd.apple.mpegurl")
@@ -83,15 +86,18 @@ async fn get_segment(Path(segment): Path<String>) -> Result<impl IntoResponse, S
 #[derive(Clone, Debug)]
 struct AppState {
     pub segment_size: u64,
-    pub current_segment: Arc<Mutex<u64>>,
-    pub is_ended: Arc<Mutex<bool>>,
+    pub current_segment: Arc<AtomicU64>,
+    pub is_ended: Arc<AtomicBool>,
 }
 
-pub fn run(segment_size: u64, current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) {
+pub fn run(
+    segment_size: u64,
+    current_segment: Arc<AtomicU64>,
+    is_ended: Arc<AtomicBool>,
+) -> anyhow::Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
-        .build()
-        .unwrap();
+        .build()?;
 
     let app = Router::new()
         .route("/api/hls/stream.m3u8", get(get_playlist))
@@ -102,8 +108,8 @@ pub fn run(segment_size: u64, current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mu
             is_ended,
         });
 
-    rt.block_on(async {
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-        axum::serve(listener, app).await.unwrap();
-    });
+    let listener = rt.block_on(tokio::net::TcpListener::bind("0.0.0.0:3000"))?;
+    rt.block_on(async { axum::serve(listener, app).await })?;
+
+    Ok(())
 }
