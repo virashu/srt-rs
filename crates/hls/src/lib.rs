@@ -27,7 +27,6 @@ const PLAYLIST_HEADER_VOD: &str = "#EXTM3U
 const PLAYLIST_HEADER_EVENT: &str = "#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-PLAYLIST-TYPE:EVENT
-#EXT-X-TARGETDURATION:2
 ";
 
 fn mock_playlist(n_segments: u32) -> String {
@@ -37,22 +36,30 @@ fn mock_playlist(n_segments: u32) -> String {
     format!("{PLAYLIST_HEADER_VOD}{segments}\n#EXT-X-ENDLIST")
 }
 
-fn read_playlist(current_segment: u64, is_ended: bool) -> String {
+fn read_playlist(segment_size: u64, current_segment: u64, is_ended: bool) -> String {
     let mut res = String::from(PLAYLIST_HEADER_EVENT);
-    writeln!(res, "#EXT-X-MEDIA-SEQUENCE:{current_segment}").unwrap();
 
     let mut ents: Vec<_> = fs::read_dir("_local")
         .unwrap()
         .filter_map(Result::ok)
         .collect();
 
+    let count = ents.len();
+    let skip = count.saturating_sub(5);
+
+    writeln!(res, "#EXT-X-TARGETDURATION:{segment_size}").unwrap();
+    writeln!(res, "#EXT-X-MEDIA-SEQUENCE:{skip}").unwrap();
+
     ents.sort_by_key(|x| (x.file_name().len(), x.file_name()));
 
-    for ent in ents.iter().skip(current_segment as usize) {
-        res += "#EXTINF:2.000,\n";
-        res += "/api/hls/segment/";
-        res += ent.file_name().to_str().unwrap();
-        res += "\n";
+    for ent in ents.iter().skip(skip) {
+        writeln!(res, "#EXTINF:{segment_size}.000,").unwrap();
+        writeln!(
+            res,
+            "/api/hls/segment/{}",
+            ent.file_name().to_str().unwrap()
+        )
+        .unwrap();
     }
 
     if is_ended {
@@ -63,13 +70,14 @@ fn read_playlist(current_segment: u64, is_ended: bool) -> String {
 }
 
 async fn get_playlist(State(state): State<AppState>) -> impl IntoResponse {
+    let segment_size = state.segment_size;
     let current_segment = { *state.current_segment.lock().unwrap() };
     let is_ended = { *state.is_ended.lock().unwrap() };
 
     Response::builder()
         .header(CONTENT_TYPE, "application/vnd.apple.mpegurl")
         .header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(read_playlist(current_segment, is_ended))
+        .body(read_playlist(segment_size, current_segment, is_ended))
         .unwrap()
 }
 
@@ -89,11 +97,12 @@ async fn get_segment(Path(segment): Path<String>) -> Result<impl IntoResponse, S
 
 #[derive(Clone, Debug)]
 struct AppState {
+    pub segment_size: u64,
     pub current_segment: Arc<Mutex<u64>>,
     pub is_ended: Arc<Mutex<bool>>,
 }
 
-pub fn run(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) {
+pub fn run(segment_size: u64, current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -103,6 +112,7 @@ pub fn run(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) {
         .route("/api/hls/stream.m3u8", get(get_playlist))
         .route("/api/hls/segment/{segment}", get(get_segment))
         .with_state(AppState {
+            segment_size,
             current_segment,
             is_ended,
         });

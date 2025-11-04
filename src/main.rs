@@ -13,22 +13,22 @@ use mpeg::{
 };
 use srt::{connection::Connection, server::Server as SrtServer};
 
+const SECONDS_PER_SEGMENT: u64 = 8;
+
 fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyhow::Result<()> {
+    let timer = Rc::new(RefCell::new(0u64));
+    let current_segment_data = Rc::new(RefCell::new(Vec::<u8>::new()));
+
     let mut srt_server = SrtServer::new()?;
 
-    let segment_s = Rc::new(RefCell::new(0u64));
-    let pids_pmt = Arc::new(Mutex::new(Vec::new()));
-
-    let on_disconnect = move |_: &Connection| {
+    let on_disconnect: &'static _ = Box::leak(Box::new(move |_: &Connection| {
         *is_ended.lock().unwrap() = true;
-    };
-    let on_disconnect: &'static _ = Box::leak(Box::new(on_disconnect));
-
+    }));
     srt_server.on_disconnect(on_disconnect);
 
     let on_data = move |_: &Connection, mpeg_data: &[u8]| {
         for chunk in mpeg_data.chunks_exact(188) {
-            let pack = MpegPacket::from_raw(chunk, &pids_pmt.lock().unwrap()).unwrap();
+            let pack = MpegPacket::from_raw(chunk, &[]).unwrap();
 
             // If packet is PAS
             if matches!(
@@ -38,27 +38,34 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
                     ..
                 }))
             ) {
-                *current_segment.lock().unwrap() = *segment_s.borrow();
+                let new_segment = *timer.borrow() / SECONDS_PER_SEGMENT;
+                let mut current_segment = current_segment.lock().unwrap();
+
+                // Flush
+                if *current_segment != new_segment {
+                    tracing::info!("segment-write {current_segment}");
+                    fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(format!("_local/segment_{current_segment}.mpg"))
+                        .unwrap()
+                        .write_all(&current_segment_data.borrow())
+                        .unwrap();
+                    current_segment_data.borrow_mut().clear();
+                }
+
+                *current_segment = new_segment;
             }
 
+            // If packet is Video (OBS)
             if pack.header.packet_id == 0x100
                 && let Some(Payload::PES(pes)) = pack.payload
             {
                 let seconds = pes.pes_header.unwrap().pts_dts.unwrap().pts() / 90_000;
-                let segment_n = seconds / 2;
-                segment_s.replace(segment_n);
+                timer.replace(seconds);
             }
 
-            let mut file = fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(format!(
-                    "_local/segment_{}.mpg",
-                    *current_segment.lock().unwrap()
-                ))
-                .unwrap();
-
-            file.write_all(chunk).unwrap();
+            current_segment_data.borrow_mut().extend(chunk);
         }
     };
 
@@ -74,7 +81,7 @@ fn run_srt(current_segment: Arc<Mutex<u64>>, is_ended: Arc<Mutex<bool>>) -> anyh
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    fs::remove_dir_all("_local").unwrap();
+    _ = fs::remove_dir_all("_local");
     fs::create_dir_all("_local").unwrap();
 
     // State
@@ -88,7 +95,7 @@ fn main() -> anyhow::Result<()> {
         || run_srt(current_segment, is_ended).unwrap()
     });
 
-    hls::run(current_segment, is_ended);
+    hls::run(SECONDS_PER_SEGMENT, current_segment, is_ended);
 
     Ok(())
 }
