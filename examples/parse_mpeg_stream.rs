@@ -34,31 +34,36 @@ fn main() -> anyhow::Result<()> {
         for chunk in mpeg_data.chunks_exact(188) {
             let pack = MpegPacket::from_raw(chunk, &pids_pmt.lock().unwrap()).unwrap();
 
-            if let Some(Payload::PSI(ProgramSpecificInformation {
-                section: Section::PAS(table),
-                ..
-            })) = &pack.payload
-            {
-                let mut lock = pids_pmt.lock().unwrap();
+            match pack.payload {
+                Some(Payload::PSI(ProgramSpecificInformation {
+                    section: Section::PAS(table),
+                    ..
+                })) => {
+                    tracing::info!("{table:#?}");
+                    let mut lock = pids_pmt.lock().unwrap();
 
-                for assoc in &table.programs {
-                    if !lock.contains(&assoc.program_id) {
-                        lock.push(assoc.program_id);
+                    for assoc in &table.programs {
+                        if !lock.contains(&assoc.program_id) {
+                            lock.push(assoc.program_id);
+                        }
                     }
                 }
+
+                Some(Payload::PSI(ProgramSpecificInformation {
+                    section: Section::PMS(table),
+                    ..
+                })) => {
+                    tracing::info!("{table:#?}");
+                }
+
+                _ => {}
             }
 
             match pack.header.packet_id {
-                // System
-                0x0000 => tracing::info!("PAT"),
-
                 // User
                 0x0100 => tracing::info!("OBS Video"),
                 0x0101 => tracing::info!("OBS Audio 1"),
                 0x0102 => tracing::info!("OBS Audio 2"),
-
-                // Dynamically-assigned PMT
-                n if pids_pmt.lock().unwrap().contains(&n) => tracing::info!("PMT"),
 
                 n => tracing::info!("Other: 0x{n:X}"),
             }
