@@ -60,7 +60,7 @@ fn run_srt(
                     fs::OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open(format!("_local/segment_{old_segment}.mpg"))
+                        .open(format!("_local/stream/segment_{old_segment}.mpg"))
                         .unwrap()
                         .write_all(&current_segment_data.borrow())
                         .unwrap();
@@ -99,8 +99,8 @@ fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    _ = fs::remove_dir_all("_local");
-    fs::create_dir_all("_local").unwrap();
+    _ = fs::remove_dir_all("_local/stream");
+    fs::create_dir_all("_local/stream").unwrap();
 
     // State
     let current_segment = Arc::new(AtomicU64::new(0));

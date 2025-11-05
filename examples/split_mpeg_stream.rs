@@ -15,8 +15,8 @@ use srt::{connection::Connection, server::Server as SrtServer};
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    fs::remove_dir_all("_local").unwrap();
-    fs::create_dir_all("_local").unwrap();
+    _ = fs::remove_dir_all("_local/stream");
+    fs::create_dir_all("_local/stream").unwrap();
 
     let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
 
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(format!("_local/segment_{}.mpg", segment.borrow()))
+                .open(format!("_local/stream/segment_{}.mpg", segment.borrow()))
                 .unwrap();
 
             file.write_all(chunk).unwrap();

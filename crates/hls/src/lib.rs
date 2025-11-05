@@ -24,7 +24,7 @@ const PLAYLIST_HEADER_EVENT: &str = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-
 fn read_playlist(segment_size: u64, _current_segment: u64, is_ended: bool) -> String {
     let mut res = String::from(PLAYLIST_HEADER_EVENT);
 
-    let mut ents: Vec<_> = fs::read_dir("_local")
+    let mut ents: Vec<_> = fs::read_dir("_local/stream")
         .unwrap()
         .filter_map(Result::ok)
         .collect();
@@ -67,7 +67,7 @@ async fn get_playlist(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn get_segment(Path(segment): Path<String>) -> Result<impl IntoResponse, StatusCode> {
-    let file_res = fs::read(format!("_local/{segment}"));
+    let file_res = fs::read(format!("_local/stream/{segment}"));
 
     if let Ok(file) = file_res {
         Ok(Response::builder()
