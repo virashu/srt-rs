@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
+pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<Connection> {
     let mut buf = [0; 80];
 
     tracing::debug!("Waiting for a handshake...");
@@ -28,6 +28,11 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
     let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet.content else {
         return Err(anyhow::anyhow!("Failed to unwrap handshake"));
     };
+
+    let stream_id = handshake
+        .stream_id_extension
+        .as_ref()
+        .map(|x| x.stream_id.clone());
 
     let out_packet_v4 = Packet {
         timestamp: in_packet.timestamp + 1,
@@ -59,7 +64,7 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
     let out_packet_v4 = Packet {
         timestamp: in_packet.timestamp + 1,
         dest_socket_id: handshake.srt_socket_id,
-        content: PacketContent::Control(ControlPacketInfo::Handshake(Handshake { ..handshake })),
+        content: PacketContent::Control(ControlPacketInfo::Handshake(Handshake {version: 4, ..handshake })),
     };
 
     socket.send_to(&out_packet_v4.to_raw(), addr)?;
@@ -67,8 +72,16 @@ pub fn handshake_v4(socket: &UdpSocket) -> anyhow::Result<()> {
     tracing::debug!("Completed Conclusion");
 
     tracing::debug!("Done!");
+    let est = SystemTime::now();
 
-    Ok(())
+    Ok(Connection {
+        stream_id,
+        established: est,
+        addr,
+        peer_srt_socket_id: handshake.srt_socket_id,
+        ack_counter: 1.into(),
+        received_since_ack: 0.into(),
+    })
 }
 
 pub fn handshake_v5(socket: &UdpSocket) -> anyhow::Result<Connection> {

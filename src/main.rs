@@ -25,7 +25,7 @@ fn run_srt(
     let timer = Rc::new(RefCell::new(0u64));
     let current_segment_data = Rc::new(RefCell::new(Vec::<u8>::new()));
 
-    let mut srt_server = SrtServer::new()?;
+    let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
 
     srt_server.on_connect(|conn| {
         let id = conn.stream_id.clone().unwrap_or_default();
@@ -71,9 +71,17 @@ fn run_srt(
 
             // If packet is Video (OBS)
             if pack.header.packet_id == 0x100
-                && let Some(Payload::PES(pes)) = pack.payload
+                && let Some(Payload::PES(pes)) = &pack.payload
             {
-                let seconds = pes.pes_header.unwrap().pts_dts.unwrap().pts() / 90_000;
+                let seconds = pes
+                    .pes_header
+                    .as_ref()
+                    .unwrap()
+                    .pts_dts
+                    .as_ref()
+                    .unwrap()
+                    .pts()
+                    / 90_000;
                 timer.replace(seconds);
             }
 

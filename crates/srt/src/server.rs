@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr, ToSocketAddrs, UdpSocket},
 };
 
 use crate::{
@@ -11,6 +11,8 @@ use crate::{
         control::{ControlPacketInfo, ack::Ack},
     },
 };
+
+const MAX_PACK_SIZE: usize = 1500;
 
 type OnConnectHandler = dyn Fn(&Connection);
 type OnDiscnnectHandler = dyn Fn(&Connection);
@@ -25,8 +27,11 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new() -> anyhow::Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:9000")?;
+    pub fn new<A>(addr: A) -> anyhow::Result<Self>
+    where
+        A: ToSocketAddrs,
+    {
+        let socket = UdpSocket::bind(addr)?;
 
         Ok(Self {
             socket,
@@ -53,6 +58,15 @@ impl Server {
         match &pack.content {
             PacketContent::Control(control) => {
                 tracing::trace!("srt | inbound | control | {control:?}");
+
+                match control {
+                    ControlPacketInfo::KeepAlive => {
+                        let keep_alive = PacketContent::Control(ControlPacketInfo::KeepAlive);
+                        tracing::trace!("srt | outbound | control | {keep_alive:?}");
+                        conn.send(&self.socket, keep_alive)?;
+                    }
+                    _ => {}
+                }
             }
             PacketContent::Data(data) => {
                 tracing::trace!(
@@ -85,16 +99,21 @@ impl Server {
         Ok(())
     }
 
+    fn recv(&self) -> anyhow::Result<(SocketAddr, Packet)> {
+        let mut buf = [0; MAX_PACK_SIZE];
+
+        let (n, addr) = self.socket.recv_from(&mut buf)?;
+        let data = &buf[..n];
+        let pack = Packet::from_raw(data)?;
+
+        Ok((addr, pack))
+    }
+
     pub fn run(&mut self) -> anyhow::Result<()> {
         loop {
-            let mut buf = [0; 10000];
-
-            let (n, addr) = self.socket.recv_from(&mut buf)?;
-            let data = &buf[..n];
+            let (addr, pack) = self.recv()?;
 
             if let Some(conn) = self.connections.get(&addr) {
-                let pack = Packet::from_raw(data)?;
-
                 if matches!(
                     pack.content,
                     PacketContent::Control(ControlPacketInfo::Shutdown)

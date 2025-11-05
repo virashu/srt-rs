@@ -6,7 +6,7 @@ use tracing::Level;
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
-    let mut srt_server = Server::new()?;
+    let mut srt_server = Server::new("0.0.0.0:9000")?;
 
     srt_server.on_connect(|conn| {
         let id = conn.stream_id.clone().unwrap_or_default();

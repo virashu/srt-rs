@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     fs::remove_dir_all("_local").unwrap();
     fs::create_dir_all("_local").unwrap();
 
-    let mut srt_server = SrtServer::new()?;
+    let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
 
     srt_server.on_connect(|conn| {
         tracing::info!(
