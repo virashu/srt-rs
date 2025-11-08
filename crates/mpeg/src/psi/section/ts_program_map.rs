@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow};
 use bit::{Bit, Bits};
 
 use crate::descriptor::{Descriptor, mpeg4_video::Mpeg4VideoDescriptor};
@@ -12,12 +13,23 @@ pub struct ProgramDefinition {
 }
 
 impl ProgramDefinition {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         let stream_type = raw[0];
         let elementary_pid = u16::from_be_bytes(raw[1..3].try_into()?) & !(0b111 << 13);
         let es_info_length = u16::from_be_bytes(raw[3..5].try_into()?) & !(0b1111 << 12);
 
         let mut descriptors = Vec::new();
+
+        let total_offset = 5;
+        let mut offset = 0;
+
+        while offset < es_info_length as usize {
+            let descriptor = Descriptor::from_raw(&raw[(total_offset + offset)..])?;
+            offset += descriptor.size();
+            descriptors.push(descriptor);
+        }
 
         Ok(Self {
             stream_type,
@@ -49,7 +61,9 @@ pub struct TsProgramMapSection {
 }
 
 impl TsProgramMapSection {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_MPEG_2);
 
         let table_id = raw[0];
@@ -86,7 +100,7 @@ impl TsProgramMapSection {
         let chksum_provided = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
         let chksum_calculated = CRC.checksum(&raw[0..(section_length as usize - 1)]);
         if chksum_calculated != chksum_provided {
-            return Err(anyhow::anyhow!(
+            return Err(anyhow!(
                 "Checksum does not match: {chksum_calculated} != {chksum_provided}"
             ));
         }

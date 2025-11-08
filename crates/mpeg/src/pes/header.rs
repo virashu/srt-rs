@@ -1,3 +1,4 @@
+use anyhow::Result;
 use bit::{Bit, Bits};
 
 #[derive(Clone, Debug)]
@@ -16,7 +17,9 @@ pub struct PesExtension {
 }
 
 impl PesExtension {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         todo!()
     }
 
@@ -112,7 +115,7 @@ pub struct PesHeader {
 }
 
 impl PesHeader {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         let pes_scrambling_control = raw[0] & 0b0011_0000 >> 4;
         let pes_priority = raw.bit(4);
         let data_alignment_indicator = raw.bit(5);

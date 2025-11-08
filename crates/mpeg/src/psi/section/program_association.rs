@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow};
 use bit::{Bit, Bits};
 
 #[derive(Debug)]
@@ -23,7 +24,9 @@ pub struct ProgramAssociationSection {
 }
 
 impl ProgramAssociationSection {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_MPEG_2);
 
         let table_id = raw[0];
@@ -52,7 +55,7 @@ impl ProgramAssociationSection {
         let chksum_provided = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
         let chksum_calculated = CRC.checksum(&raw[0..(section_length as usize - 1)]);
         if chksum_calculated != chksum_provided {
-            return Err(anyhow::anyhow!(
+            return Err(anyhow!(
                 "Checksum does not match: {chksum_calculated} != {chksum_provided}"
             ));
         }

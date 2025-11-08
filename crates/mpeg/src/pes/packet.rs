@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use crate::{constants::stream_ids::GROUP_NO_HEADER, pes::header::PesHeader};
 
 /// 3B+
@@ -15,7 +17,9 @@ pub struct PesPacket {
 }
 
 impl PesPacket {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         let stream_id = raw[3];
         let pes_packet_length = u16::from_be_bytes(raw[4..6].try_into()?);
 

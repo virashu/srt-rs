@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use crate::{
     constants::table_ids,
     psi::section::{
@@ -18,7 +20,9 @@ pub struct ProgramSpecificInformation {
 }
 
 impl ProgramSpecificInformation {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         let pointer = raw[0] + 1;
         let table_id = raw[pointer as usize];
 

@@ -1,10 +1,4 @@
-//
-//   0                   1                   2                   3
-//   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//  |   Sync Byte   |T|U|P|        Package ID       |TSC|AFC|  CC   |
-//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//
+use anyhow::{Result, anyhow};
 use bit::Bit;
 
 /// 4B
@@ -28,9 +22,11 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         if raw[0] != 0x47 {
-            return Err(anyhow::anyhow!("Missing sync byte"));
+            return Err(anyhow!("Missing sync byte: {raw:?}"));
         }
 
         let transport_error_indicator = raw[1].bit(0);

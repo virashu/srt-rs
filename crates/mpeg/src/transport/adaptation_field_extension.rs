@@ -1,3 +1,4 @@
+use anyhow::Result;
 use bit::{Bit, Bits};
 
 /// 2B
@@ -35,7 +36,9 @@ pub struct AdaptationFieldExtension {
 }
 
 impl AdaptationFieldExtension {
-    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+    /// # Errors
+    /// Error while parsing raw bytes
+    pub fn from_raw(raw: &[u8]) -> Result<Self> {
         let adaptation_field_extension_length = raw[0];
         let flags = raw[1];
 
@@ -45,14 +48,14 @@ impl AdaptationFieldExtension {
             .bit(0)
             .then(|| AdaptationFieldExtensionLtw {
                 ltw_valid_flag: raw[offset..].bit(0),
-                ltw_offset: raw[offset..].bits::<u16>(offset, 15),
+                ltw_offset: raw[offset..].bits::<u16>(1, 15),
             })
             .inspect(|_| offset += 2);
 
         let piecewise_rate = flags
-            .bit(2)
+            .bit(1)
             .then(|| raw[offset..].bits::<u32>(2, 22))
-            .inspect(|_| offset += 5);
+            .inspect(|_| offset += 3);
 
         let splice_type = flags
             .bit(2)
@@ -60,8 +63,8 @@ impl AdaptationFieldExtension {
                 let splice_type = raw[offset..].bits::<u8>(0, 4);
 
                 let mut dts_next_au = 0;
-                dts_next_au |= raw[offset..].bits::<u64>(4, 3);
-                dts_next_au |= raw[offset..].bits::<u64>(8, 15);
+                dts_next_au |= raw[offset..].bits::<u64>(4, 3) << 29;
+                dts_next_au |= raw[offset..].bits::<u64>(8, 15) << 15;
                 dts_next_au |= raw[offset..].bits::<u64>(16, 15);
 
                 AdaptationFieldExtensionSeamlessSplice {
