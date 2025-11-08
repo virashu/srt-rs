@@ -25,6 +25,9 @@ fn run_srt(
     let timer = Rc::new(RefCell::new(0u64));
     let current_segment_data = Rc::new(RefCell::new(Vec::<u8>::new()));
 
+    let system_pid = Rc::new(RefCell::new(0u16));
+    let clock_pid = Rc::new(RefCell::new(0u16));
+
     let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
 
     srt_server.on_connect({
@@ -44,49 +47,69 @@ fn run_srt(
 
     srt_server.on_data(move |_, mpeg_data| {
         for chunk in mpeg_data.chunks_exact(MPEG_PACKET_SIZE) {
-            let pack = MpegPacket::from_raw(chunk, &[]).unwrap();
+            let pmt_ids = {
+                let pmt = *system_pid.borrow();
+                if pmt != 0 { &[pmt] } else { &[] as &[u16] }
+            };
 
-            // If packet is PAS
-            if matches!(
-                pack.payload,
+            let pack = MpegPacket::from_raw(chunk, pmt_ids).unwrap();
+
+            match pack.payload {
+                // If packet is PAS
                 Some(Payload::PSI(ProgramSpecificInformation {
-                    section: Section::PAS(_),
+                    section: Section::PAS(table),
                     ..
-                }))
-            ) {
-                let new_segment = *timer.borrow() / segment_size;
-                let old_segment = current_segment.swap(new_segment, Ordering::Relaxed);
+                })) => {
+                    if *system_pid.borrow() == 0 {
+                        tracing::info!("Got system program id: {}", table.programs[0].program_id);
+                        system_pid.replace(table.programs[0].program_id);
+                    }
 
-                // Flush
-                if old_segment != new_segment {
-                    tracing::info!("segment-write {old_segment}");
+                    let new_segment = *timer.borrow() / segment_size;
+                    let old_segment = current_segment.swap(new_segment, Ordering::Relaxed);
 
-                    fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(format!("_local/stream/segment_{old_segment}.mpg"))
-                        .unwrap()
-                        .write_all(&current_segment_data.borrow())
-                        .unwrap();
+                    // Flush
+                    if old_segment != new_segment {
+                        tracing::info!("segment-write {old_segment}");
 
-                    current_segment_data.borrow_mut().clear();
+                        fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(format!("_local/stream/segment_{old_segment}.mpg"))
+                            .unwrap()
+                            .write_all(&current_segment_data.borrow())
+                            .unwrap();
+
+                        current_segment_data.borrow_mut().clear();
+                    }
                 }
-            }
 
-            // If packet is Video (OBS)
-            if pack.header.packet_id == 0x100
-                && let Some(Payload::PES(pes)) = &pack.payload
-            {
-                let seconds = pes
-                    .pes_header
-                    .as_ref()
-                    .unwrap()
-                    .pts_dts
-                    .as_ref()
-                    .unwrap()
-                    .pts()
-                    / 90_000;
-                timer.replace(seconds);
+                // If packet is PMS
+                Some(Payload::PSI(ProgramSpecificInformation {
+                    section: Section::PMS(table),
+                    ..
+                })) => {
+                    if *clock_pid.borrow() == 0 {
+                        tracing::info!("Got clock program id: {}", table.pcr_pid);
+                        clock_pid.replace(table.pcr_pid);
+                    }
+                }
+
+                // If packet is Video (OBS) + clock
+                Some(Payload::PES(pes)) if pack.header.packet_id == *clock_pid.borrow() => {
+                    let seconds = pes
+                        .pes_header
+                        .as_ref()
+                        .unwrap()
+                        .pts_dts
+                        .as_ref()
+                        .unwrap()
+                        .pts()
+                        / 90_000;
+                    timer.replace(seconds);
+                }
+
+                _ => {}
             }
 
             current_segment_data.borrow_mut().extend(chunk);
