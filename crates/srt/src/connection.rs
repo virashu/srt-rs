@@ -126,18 +126,18 @@ impl<'c> Connection<'c> {
         })
     }
 
-    pub fn inc_ack(&self) -> u32 {
+    pub(crate) fn inc_ack(&self) -> u32 {
         self.ack_counter.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub fn check_ack(&self) -> bool {
+    pub(crate) fn check_ack(&self) -> bool {
         self.received_since_ack
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some((x + 1) % 64))
             == Ok(0)
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn pack(&self, content: PacketContent) -> Result<Packet> {
+    pub(crate) fn pack(&self, content: PacketContent) -> Result<Packet> {
         Ok(Packet {
             timestamp: SystemTime::now()
                 .duration_since(self.established)?
@@ -231,7 +231,7 @@ impl<'c> Connection<'c> {
         Ok(())
     }
 
-    pub fn handle(&self, pack: &Packet) -> Result<()> {
+    pub(crate) fn handle(&self, pack: &Packet) -> Result<()> {
         self.update()?;
 
         match &pack.content {
@@ -257,7 +257,7 @@ impl<'c> Connection<'c> {
         self.send(ack)
     }
 
-    pub fn update(&self) -> Result<()> {
+    pub(crate) fn update(&self) -> Result<()> {
         let mut last_ack_timestamp = self.last_ack_timestamp.lock().unwrap();
         let micros: u32 = last_ack_timestamp.elapsed().as_micros().try_into().unwrap();
 

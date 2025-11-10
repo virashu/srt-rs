@@ -70,10 +70,12 @@ impl<'c> Server<'c> {
                 pack.content,
                 PacketContent::Control(ControlPacketInfo::Shutdown)
             ) {
-                if let Some(conn) = self.connections.remove(&addr)
-                    && let Some(callback) = &self.on_disconnect
-                {
-                    callback(&conn);
+                if let Some(conn) = self.connections.remove(&addr) {
+                    conn.handle(&pack)?;
+
+                    if let Some(callback) = &self.on_disconnect {
+                        callback(&conn);
+                    }
                 }
             } else if let Some(conn) = self.connections.get(&addr) {
                 conn.handle(&pack)?;
