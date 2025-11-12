@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, bail};
 use bit::Bit;
 
 use crate::transport::adaptation_field_control::AdaptationFieldControl;
@@ -21,7 +21,7 @@ impl Header {
     /// Error while parsing raw bytes
     pub fn from_raw(raw: &[u8]) -> Result<Self> {
         if raw[0] != 0x47 {
-            return Err(anyhow!("Missing sync byte: {raw:?}"));
+            bail!("Missing sync byte: {raw:?}");
         }
 
         // Raw numbers

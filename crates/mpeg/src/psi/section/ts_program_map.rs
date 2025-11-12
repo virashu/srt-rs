@@ -1,7 +1,7 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, bail};
 use bit::{Bit, Bits};
 
-use crate::descriptor::{Descriptor, mpeg4_video::Mpeg4VideoDescriptor};
+use crate::descriptor::Descriptor;
 
 #[derive(Debug)]
 pub struct ProgramDefinition {
@@ -102,9 +102,7 @@ impl TsProgramMapSection {
         let chksum_provided = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
         let chksum_calculated = CRC.checksum(&raw[0..(section_length as usize - 1)]);
         if chksum_calculated != chksum_provided {
-            return Err(anyhow!(
-                "Checksum does not match: {chksum_calculated} != {chksum_provided}"
-            ));
+            bail!("Checksum does not match: {chksum_calculated} != {chksum_provided}");
         }
 
         Ok(Self {

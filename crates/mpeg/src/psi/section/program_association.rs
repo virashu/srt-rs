@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, bail};
 use bit::{Bit, Bits};
 
 #[derive(Debug)]
@@ -55,9 +55,9 @@ impl ProgramAssociationSection {
         let chksum_provided = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
         let chksum_calculated = CRC.checksum(&raw[0..(section_length as usize - 1)]);
         if chksum_calculated != chksum_provided {
-            return Err(anyhow!(
+            bail!(
                 "Checksum does not match: {chksum_calculated} != {chksum_provided}"
-            ));
+            );
         }
 
         Ok(Self {

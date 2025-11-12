@@ -1,3 +1,5 @@
+use anyhow::bail;
+
 #[derive(Clone, Debug)]
 pub enum KeyBasedEncryption {
     // None,
@@ -22,7 +24,7 @@ impl KeyMaterialExtension {
         let packet_type = raw[4] & 0b0000_1111;
         // let sign = u16::from_be_bytes(raw[5..7].try_into()?); // = 0x2029
         let key_based_encryption = match raw[7] & 0x0000_0011 {
-            0b00 => return Err(anyhow::anyhow!("Invalid extension format")),
+            0b00 => bail!("Invalid extension format"),
             0b01 => KeyBasedEncryption::EvenKey,
             0b10 => KeyBasedEncryption::OddKey,
             0b11 => KeyBasedEncryption::Both,

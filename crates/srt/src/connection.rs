@@ -7,7 +7,7 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use crate::{
     constants::{FULL_ACK_INTERVAL, HANDSHAKE_MAGIC_CODE, RTT_INIT, RTT_VAR_INIT},
@@ -61,7 +61,7 @@ impl<'c> Connection<'c> {
         let in_packet = Packet::from_raw(data)?;
         let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet.content
         else {
-            return Err(anyhow::anyhow!("Failed to unwrap handshake"));
+            bail!("Failed to unwrap handshake");
         };
 
         let out_packet_v5 = Packet {
@@ -89,7 +89,7 @@ impl<'c> Connection<'c> {
         let in_packet = Packet::from_raw(data)?;
         let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet.content
         else {
-            return Err(anyhow::anyhow!("Failed to unwrap handshake"));
+            bail!("Failed to unwrap handshake");
         };
 
         let peer_srt_socket_id = handshake.srt_socket_id;
