@@ -9,7 +9,7 @@ use srt::{connection::Connection, server::Server as SrtServer};
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
+    let mut srt_server = SrtServer::new();
 
     srt_server.on_connect(|conn| {
         tracing::info!(
@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     srt_server.on_data(on_data);
 
     tracing::info!("Starting SRT");
-    srt_server.run()?;
+    srt_server.run("0.0.0.0:9000")?;
 
     Ok(())
 }

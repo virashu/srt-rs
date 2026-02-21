@@ -15,29 +15,19 @@ type OnConnectHandler = dyn Fn(&Connection);
 type OnDiscnnectHandler = dyn Fn(&Connection);
 pub type OnDataHandler = dyn Fn(&Connection, &[u8]);
 
-pub struct Server<'c> {
-    socket: UdpSocket,
-    connections: HashMap<SocketAddr, Connection<'c>>,
-
+pub struct Server {
     on_connect: Option<Box<OnConnectHandler>>,
     on_disconnect: Option<Box<OnDiscnnectHandler>>,
     on_data: Option<Box<OnDataHandler>>,
 }
 
-impl<'c> Server<'c> {
-    pub fn new<A>(addr: A) -> Result<Self>
-    where
-        A: ToSocketAddrs,
-    {
-        let socket = UdpSocket::bind(addr)?;
-
-        Ok(Self {
-            socket,
-            connections: HashMap::new(),
+impl Server {
+    pub fn new() -> Self {
+        Self {
             on_connect: None,
             on_disconnect: None,
             on_data: None,
-        })
+        }
     }
 
     pub fn on_connect(&mut self, f: impl Fn(&Connection) + 'static) {
@@ -52,42 +42,47 @@ impl<'c> Server<'c> {
         self.on_data = Some(Box::new(f));
     }
 
-    fn recv(&self) -> Result<(SocketAddr, Packet)> {
+    fn recv(&self, socket: &UdpSocket) -> Result<(SocketAddr, Packet)> {
         let mut buf = [0; MAX_PACKET_SIZE];
 
-        let (n, addr) = self.socket.recv_from(&mut buf)?;
+        let (n, addr) = socket.recv_from(&mut buf)?;
         let data = &buf[..n];
         let pack = Packet::from_raw(data)?;
 
         Ok((addr, pack))
     }
 
-    pub fn run(&'c mut self) -> Result<()> {
-        loop {
-            let (addr, pack) = self.recv()?;
+    pub fn run(&self, addr: impl ToSocketAddrs) -> Result<()> {
+        let socket = UdpSocket::bind(addr)?;
 
+        let mut connections = HashMap::<SocketAddr, Connection>::new();
+
+        loop {
+            let (addr, pack) = self.recv(&socket)?;
+
+            // Disconnect
             if matches!(
                 pack.content,
                 PacketContent::Control(ControlPacketInfo::Shutdown)
             ) {
-                if let Some(conn) = self.connections.remove(&addr) {
+                if let Some(conn) = connections.remove(&addr) {
                     conn.handle(&pack)?;
 
                     if let Some(callback) = &self.on_disconnect {
                         callback(&conn);
                     }
                 }
-            } else if let Some(conn) = self.connections.get(&addr) {
+            }
+            // Handle data
+            else if let Some(conn) = connections.get(&addr) {
                 conn.handle(&pack)?;
-            } else {
-                let Ok(conn) = Connection::establish_v5(&self.socket, self.on_data.as_deref())
-                else {
-                    continue;
-                };
+            }
+            // Connect
+            else if let Ok(conn) = Connection::establish_v5(&socket, self.on_data.as_deref()) {
                 if let Some(callback) = &self.on_connect {
                     callback(&conn);
                 }
-                self.connections.insert(addr, conn);
+                connections.insert(addr, conn);
             }
         }
     }

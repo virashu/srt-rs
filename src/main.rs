@@ -28,7 +28,7 @@ fn run_srt(
     let system_pid = Rc::new(RefCell::new(0u16));
     let clock_pid = Rc::new(RefCell::new(0u16));
 
-    let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
+    let mut srt_server = SrtServer::new();
 
     srt_server.on_connect({
         let is_ended = is_ended.clone();
@@ -110,7 +110,7 @@ fn run_srt(
         }
     });
 
-    srt_server.run()?;
+    srt_server.run("0.0.0.0:9000")?;
 
     Ok(())
 }

@@ -35,7 +35,7 @@ pub struct Connection<'c> {
     ack_counter: AtomicU32,
 
     /// Timestamp of the last **sent** Ack
-    /// (used to caltulate RTT)
+    /// (used to calculate RTT)
     last_ack_timestamp: Mutex<Instant>,
 
     /// Package sequence number of last received data packet

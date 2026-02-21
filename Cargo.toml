@@ -5,13 +5,24 @@ edition = "2024"
 default-run = "srt-rs"
 
 [dependencies]
-anyhow = "1.0.100"
 srt = { path = "./crates/srt" }
 hls = { path = "./crates/hls" }
 mpeg = { path = "./crates/mpeg" }
+
+anyhow = "1.0.100"
 tracing = "0.1.41"
+
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 
 [workspace]
 members = [".", "crates/*"]
 default-members = [".", "crates/*"]
+
+[workspace.lints.clippy]
+print_stdout = "warn"
+unwrap_used = "warn"
+
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+new_without_default = "allow"
