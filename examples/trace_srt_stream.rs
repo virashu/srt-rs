@@ -1,7 +1,7 @@
-use srt::server::Server;
+use srt::CallbackServer;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter("trace").init();
 
-    Server::new().run("0.0.0.0:9000")
+    CallbackServer::new().run("0.0.0.0:9000")
 }

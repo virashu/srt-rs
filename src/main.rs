@@ -15,7 +15,7 @@ use mpeg::{
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
-use srt::server::Server as SrtServer;
+use srt::CallbackServer as SrtServer;
 
 fn run_srt(
     segment_size: u64,

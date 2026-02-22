@@ -4,7 +4,7 @@ use mpeg::{
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
-use srt::{connection::Connection, server::Server as SrtServer};
+use srt::{CallbackConnection, CallbackServer as SrtServer};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
 
     let pids_pmt = Arc::new(Mutex::new(Vec::new()));
 
-    let on_data = move |conn: &Connection, mpeg_data: &[u8]| {
+    let on_data = move |conn: &CallbackConnection, mpeg_data: &[u8]| {
         let id = conn.stream_id.clone().unwrap_or_default();
         tracing::info!("Packet from {id:?}");
 
