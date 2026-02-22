@@ -12,7 +12,8 @@ use axum::{
     body::Body,
     extract::{Path, State},
     http::{
-        Response, StatusCode,
+        Response,
+        StatusCode,
         header::{ACCESS_CONTROL_ALLOW_ORIGIN, CONTENT_TYPE},
     },
     response::IntoResponse,
@@ -24,7 +25,7 @@ const PLAYLIST_HEADER_EVENT: &str = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-
 const API_HLS_PLAYLIST_ROOT: &str = "/api/hls/playlist";
 const API_HLS_SEGMENT_ROOT: &str = "/api/hls/segment";
 
-fn read_playlist(segment_size: u64, _current_segment: u64, is_ended: bool) -> String {
+fn read_playlist(segment_size: u64, _current_segment: u64, running: bool) -> String {
     let mut res = String::from(PLAYLIST_HEADER_EVENT);
 
     let mut ents: Vec<_> = fs::read_dir("_local/stream")
@@ -51,7 +52,7 @@ fn read_playlist(segment_size: u64, _current_segment: u64, is_ended: bool) -> St
         .unwrap();
     }
 
-    if is_ended {
+    if !running {
         res.push_str("#EXT-X-ENDLIST");
     }
 
@@ -64,12 +65,12 @@ async fn get_playlist(
 ) -> impl IntoResponse {
     let segment_size = state.segment_size;
     let current_segment = state.current_segment.load(Ordering::Relaxed);
-    let is_ended = state.is_ended.load(Ordering::Relaxed);
+    let running = state.running.load(Ordering::Relaxed);
 
     Response::builder()
         .header(CONTENT_TYPE, "application/vnd.apple.mpegurl")
         .header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(read_playlist(segment_size, current_segment, is_ended))
+        .body(read_playlist(segment_size, current_segment, running))
         .unwrap()
 }
 
@@ -91,13 +92,13 @@ async fn get_segment(Path(segment): Path<String>) -> Result<impl IntoResponse, S
 struct AppState {
     pub segment_size: u64,
     pub current_segment: Arc<AtomicU64>,
-    pub is_ended: Arc<AtomicBool>,
+    pub running: Arc<AtomicBool>,
 }
 
 pub fn run(
     segment_size: u64,
     current_segment: Arc<AtomicU64>,
-    is_ended: Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let app = Router::new()
         .route(
@@ -111,7 +112,7 @@ pub fn run(
         .with_state(AppState {
             segment_size,
             current_segment,
-            is_ended,
+            running,
         });
 
     let rt = tokio::runtime::Builder::new_current_thread()

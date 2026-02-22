@@ -20,7 +20,7 @@ use srt::server::Server as SrtServer;
 fn run_srt(
     segment_size: u64,
     current_segment: Arc<AtomicU64>,
-    is_ended: Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let timer = Rc::new(RefCell::new(0u64));
     let current_segment_data = Rc::new(RefCell::new(Vec::<u8>::new()));
@@ -31,18 +31,18 @@ fn run_srt(
     let mut srt_server = SrtServer::new();
 
     srt_server.on_connect({
-        let is_ended = is_ended.clone();
+        let running = running.clone();
         move |conn| {
             let id = conn.stream_id.clone().unwrap_or_default();
             tracing::info!("Stream started: {id:?}");
-            is_ended.store(false, Ordering::Relaxed);
+            running.store(true, Ordering::Relaxed);
         }
     });
 
     srt_server.on_disconnect(move |conn| {
         let id = conn.stream_id.clone().unwrap_or_default();
         tracing::info!("Stream ended: {id:?}");
-        is_ended.store(true, Ordering::Relaxed);
+        running.store(false, Ordering::Relaxed);
     });
 
     srt_server.on_data(move |_, mpeg_data| {
@@ -125,18 +125,18 @@ fn main() -> anyhow::Result<()> {
 
     // State
     let current_segment = Arc::new(AtomicU64::new(0));
-    let is_ended = Arc::new(AtomicBool::new(false));
+    let running = Arc::new(AtomicBool::new(true));
 
     tracing::info!("Starting SRT");
     thread::spawn({
         let current_segment = current_segment.clone();
-        let is_ended = is_ended.clone();
+        let is_ended = running.clone();
 
         || run_srt(SECONDS_PER_SEGMENT, current_segment, is_ended).unwrap()
     });
 
     tracing::info!("Starting HLS");
-    hls::run(SECONDS_PER_SEGMENT, current_segment, is_ended)?;
+    hls::run(SECONDS_PER_SEGMENT, current_segment, running)?;
 
     Ok(())
 }

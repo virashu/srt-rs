@@ -1,6 +1,6 @@
 //! <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.4>
 
-use crate::packet::control::control_types;
+use super::control_types;
 
 #[derive(Clone, Debug)]
 pub enum Ack {

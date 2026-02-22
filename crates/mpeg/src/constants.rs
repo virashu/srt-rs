@@ -1,5 +1,7 @@
 pub const PACKET_SIZE: usize = 188;
 
+pub const TICKS_PER_SECOND: usize = 90_000;
+
 pub mod stream_ids {
     pub const PROGRAM_STREAM_MAP: u8 = 0b1011_1100;
     pub const PRIVATE_STREAM_1: u8 = 0b1011_1101;

@@ -1,5 +1,9 @@
-use crate::packet::control::{
-    ack::Ack, ack_ack::AckAck, drop_req::DropReq, handshake::Handshake, nak::Nak,
+use self::{
+    ack::Ack,
+    ack_ack::AckAck,
+    drop_req::DropReq,
+    handshake::Handshake,
+    nak::Nak,
     peer_error::PeerError,
 };
 

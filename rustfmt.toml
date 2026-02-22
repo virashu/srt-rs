@@ -1,2 +1,7 @@
 imports_granularity = "Crate"
+imports_layout = "HorizontalVertical"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+
 reorder_impl_items = true
+reorder_modules = true

@@ -3,7 +3,8 @@ use anyhow::Result;
 use crate::{
     constants::descriptor_tags,
     descriptor::{
-        mpeg4_video::Mpeg4VideoDescriptor, private_data_indicator::PrivateDataIndicatorDescriptor,
+        mpeg4_video::Mpeg4VideoDescriptor,
+        private_data_indicator::PrivateDataIndicatorDescriptor,
     },
 };
 

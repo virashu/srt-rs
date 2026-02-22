@@ -3,7 +3,8 @@ use anyhow::Result;
 use crate::{
     constants::table_ids,
     psi::section::{
-        program_association::ProgramAssociationSection, ts_program_map::TsProgramMapSection,
+        program_association::ProgramAssociationSection,
+        ts_program_map::TsProgramMapSection,
     },
 };
 

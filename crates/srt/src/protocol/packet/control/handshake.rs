@@ -1,13 +1,14 @@
 //! <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1>
 
+use crate::macros::auto_try_from;
+
 pub mod extension;
 
-use crate::{
-    macros::auto_try_from,
-    packet::control::handshake::extension::{
-        extension_flags, handshake::HandshakeExtension, key_material::KeyMaterialExtension,
-        stream_id::StreamIdExtension,
-    },
+use self::extension::{
+    extension_flags,
+    handshake::HandshakeExtension,
+    key_material::KeyMaterialExtension,
+    stream_id::StreamIdExtension,
 };
 
 auto_try_from! {

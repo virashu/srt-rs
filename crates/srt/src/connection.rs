@@ -10,11 +10,14 @@ use std::{
 use anyhow::{Result, bail};
 
 use crate::{
-    constants::{FULL_ACK_INTERVAL, HANDSHAKE_MAGIC_CODE, RTT_INIT, RTT_VAR_INIT},
-    packet::{
-        Packet, PacketContent,
-        control::{ControlPacketInfo, ack::Ack, handshake::Handshake, nak::Nak},
-        data::DataPacketInfo,
+    protocol::{
+        constants::{FULL_ACK_INTERVAL, HANDSHAKE_MAGIC_CODE, RTT_INIT, RTT_VAR_INIT},
+        packet::{
+            Packet,
+            PacketContent,
+            control::{ControlPacketInfo, ack::Ack, handshake::Handshake, nak::Nak},
+            data::DataPacketInfo,
+        },
     },
     server::OnDataHandler,
 };
@@ -195,6 +198,10 @@ impl<'c> Connection<'c> {
                 let sent = self.last_ack_timestamp.lock().unwrap();
                 let rtt_new: u32 = sent.elapsed().as_micros().try_into().unwrap();
 
+                #[allow(
+                    clippy::unwrap_used,
+                    reason = "always `Ok()`; awaiting for `atomic_try_update` feature"
+                )]
                 let rtt_old = self
                     .rtt
                     .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
@@ -202,6 +209,10 @@ impl<'c> Connection<'c> {
                     })
                     .unwrap();
 
+                #[allow(
+                    clippy::unwrap_used,
+                    reason = "always `Ok()`; awaiting for `atomic_try_update` feature"
+                )]
                 self.rtt_var
                     .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |rtt_var| {
                         Some(rtt_var * 3 / 4 + (rtt_old).abs_diff(rtt_new) / 4)

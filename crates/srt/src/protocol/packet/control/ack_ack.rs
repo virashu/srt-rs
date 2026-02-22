@@ -1,4 +1,4 @@
-use crate::packet::control::control_types;
+use super::control_types;
 
 #[derive(Clone, Debug)]
 pub struct AckAck {

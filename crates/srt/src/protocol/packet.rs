@@ -1,7 +1,7 @@
 pub mod control;
 pub mod data;
 
-use crate::packet::{control::ControlPacketInfo, data::DataPacketInfo};
+use self::{control::ControlPacketInfo, data::DataPacketInfo};
 
 #[derive(Debug)]
 pub enum PacketContent {

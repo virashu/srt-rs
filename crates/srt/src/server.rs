@@ -7,8 +7,10 @@ use anyhow::Result;
 
 use crate::{
     connection::Connection,
-    constants::MAX_PACKET_SIZE,
-    packet::{Packet, PacketContent, control::ControlPacketInfo},
+    protocol::{
+        constants::MAX_PACKET_SIZE,
+        packet::{Packet, PacketContent, control::ControlPacketInfo},
+    },
 };
 
 type OnConnectHandler = dyn Fn(&Connection);
