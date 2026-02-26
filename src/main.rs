@@ -110,7 +110,7 @@ fn run_srt(
         }
     });
 
-    srt_server.run("0.0.0.0:9000")?;
+    srt_server.run("0.0.0.0:1935")?;
 
     Ok(())
 }

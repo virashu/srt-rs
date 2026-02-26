@@ -32,5 +32,5 @@ fn main() -> anyhow::Result<()> {
     });
 
     tracing::info!("Starting SRT");
-    srt_server.run("0.0.0.0:9000")
+    srt_server.run("0.0.0.0:1935")
 }

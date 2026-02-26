@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
 };
 
@@ -53,41 +53,41 @@ impl CallbackServer {
     }
 
     pub fn run(&self, addr: impl ToSocketAddrs) -> Result<()> {
+        let _span = tracing::info_span!("srt_server").entered();
+
         let socket = UdpSocket::bind(addr)?;
 
         let mut connections = HashMap::<SocketAddr, CallbackConnection>::new();
 
         loop {
             let (addr, pack) = self.recv(&socket)?;
+            let entry = connections.entry(addr);
 
-            // Disconnect
-            if matches!(
-                pack.content,
-                PacketContent::Control(ControlPacketInfo::Shutdown)
-            ) {
-                if let Some(conn) = connections.remove(&addr) {
-                    conn.handle(&pack)?;
-
-                    if let Some(callback) = &self.on_disconnect {
-                        callback(&conn);
+            match entry {
+                // New connection
+                Entry::Vacant(vacant_entry) => {
+                    match CallbackConnection::establish_v5(&socket, self.on_data.as_deref()) {
+                        Ok(conn) => {
+                            tracing::info!(?addr, "New connection");
+                            let conn = vacant_entry.insert(conn);
+                            self.on_connect.as_ref().inspect(|f| f(conn));
+                        }
+                        Err(e) => tracing::error!("Failed to establish connection: {e}"),
                     }
                 }
-            }
-            // Handle data
-            else if let Some(conn) = connections.get(&addr) {
-                conn.handle(&pack)?;
-                continue;
-            }
+                // Existing connection
+                Entry::Occupied(occupied_entry) => {
+                    occupied_entry.get().handle(&pack)?;
 
-            // Connect
-            match CallbackConnection::establish_v5(&socket, self.on_data.as_deref()) {
-                Ok(conn) => {
-                    if let Some(callback) = &self.on_connect {
-                        callback(&conn);
+                    if matches!(
+                        pack.content,
+                        PacketContent::Control(ControlPacketInfo::Shutdown)
+                    ) {
+                        tracing::info!(?addr, "Disconnect");
+                        let conn = occupied_entry.remove();
+                        self.on_disconnect.as_ref().inspect(|f| f(&conn));
                     }
-                    connections.insert(addr, conn);
                 }
-                Err(e) => tracing::error!("Failed to establish connection: {e}"),
             }
         }
     }

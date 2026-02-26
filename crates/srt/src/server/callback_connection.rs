@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::{Result, bail};
+use tracing::{Level, span};
 
 use super::callback_server::OnDataHandler;
 use crate::protocol::{
@@ -50,6 +51,8 @@ pub struct CallbackConnection<'c> {
 
 impl<'c> CallbackConnection<'c> {
     pub fn establish_v5(socket: &'c UdpSocket, on_data: Option<&'c OnDataHandler>) -> Result<Self> {
+        let _span = span!(Level::INFO, "srt_connection_handshake");
+
         let mut buf = [0; 200];
 
         tracing::debug!("Waiting for a handshake...");

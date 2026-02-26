@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     srt_server.on_data(on_data);
 
     tracing::info!("Starting SRT");
-    srt_server.run("0.0.0.0:9000")?;
+    srt_server.run("0.0.0.0:1935")?;
 
     Ok(())
 }
