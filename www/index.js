@@ -1,4 +1,4 @@
-const videoSrc = "http://127.0.0.1:3000/api/hls/playlist/some_stream";
+const videoSrc = "http://127.0.0.1/api/hls/playlist/user_abc";
 
 /** @type {HTMLVideoElement} */
 const video = document.getElementById("video");
