@@ -3,7 +3,7 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -50,14 +50,14 @@ impl AsyncConnection {
         // Induction phase
         //
 
-        let in_packet_0 = stream.recv().await.unwrap();
-        let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet_0.content
+        let induction_in = stream.recv().await.context("Failed to receive handshake")?;
+        let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = induction_in.content
         else {
             bail!("Failed to unwrap handshake");
         };
 
-        let out_packet_0_v5 = Packet {
-            timestamp: in_packet_0.timestamp + 1,
+        let induction_out = Packet {
+            timestamp: induction_in.timestamp + 1,
             dest_socket_id: handshake.srt_socket_id,
             content: PacketContent::Control(ControlPacketInfo::Handshake(Handshake {
                 version: 5,
@@ -67,7 +67,7 @@ impl AsyncConnection {
                 ..handshake
             })),
         };
-        stream.send(out_packet_0_v5).await?;
+        stream.send(induction_out).await?;
 
         tracing::debug!("Completed Induction");
 
@@ -75,8 +75,8 @@ impl AsyncConnection {
         // Conclusion phase
         //
 
-        let in_packet_1 = stream.recv().await.unwrap();
-        let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet_1.content
+        let conclusion_in = stream.recv().await.context("Failed to receive handshake")?;
+        let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = conclusion_in.content
         else {
             bail!("Failed to unwrap handshake");
         };
@@ -87,12 +87,12 @@ impl AsyncConnection {
             .as_ref()
             .map(|x| x.stream_id.clone());
 
-        let out_packet_1_v5 = Packet {
-            timestamp: in_packet_1.timestamp + 1,
+        let conclusion_out = Packet {
+            timestamp: conclusion_in.timestamp + 1,
             dest_socket_id: handshake.srt_socket_id,
             content: PacketContent::Control(ControlPacketInfo::Handshake(handshake)),
         };
-        stream.send(out_packet_1_v5).await?;
+        stream.send(conclusion_out).await?;
 
         tracing::debug!("Completed Conclusion");
 
@@ -151,6 +151,21 @@ impl AsyncConnection {
         Ok(())
     }
 
+    async fn send_full_ack(&self) -> Result<()> {
+        let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Full {
+            ack_number: self.inc_ack(),
+            last_ackd_packet_sequence_number: self.last_received.load(Ordering::Relaxed) + 1,
+            rtt: self.rtt.load(Ordering::Relaxed),
+            rtt_variance: self.rtt_var.load(Ordering::Relaxed),
+            available_buffer_size: 1,
+            packets_receiving_rate: 1,
+            estimated_link_capacity: 1,
+            receiving_rate: 1,
+        }));
+        tracing::trace!("srt | outbound | control | {ack:?}");
+        self.send(ack).await
+    }
+
     async fn handle_control(&self, control: &ControlPacketInfo) -> Result<()> {
         tracing::trace!("srt | inbound | control | {control:?}");
 
@@ -166,7 +181,7 @@ impl AsyncConnection {
                 // RTTVar = 3/4 * RTTVar + 1/4 * abs(RTT - rtt)
 
                 let sent = self.last_ack_timestamp.lock().await;
-                let rtt_new: u32 = sent.elapsed().as_micros().try_into().unwrap();
+                let rtt_new: u32 = sent.elapsed().as_micros().try_into()?;
 
                 #[allow(
                     clippy::unwrap_used,
@@ -243,28 +258,19 @@ impl AsyncConnection {
         Ok(())
     }
 
-    pub(crate) async fn handle(&self, pack: &Packet) -> Result<()> {
-        self.update().await?;
-
-        match &pack.content {
-            PacketContent::Control(control) => self.handle_control(control).await?,
-            PacketContent::Data(data) => {
-                _ = self.handle_data(data).await?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub async fn recv_data(&mut self) -> Result<Box<[u8]>> {
         if !self.running.load(Ordering::Relaxed) {
             return Err(anyhow!("Shut down"));
         }
 
-        self.update().await?;
-
         let data = loop {
-            let pack = self.stream.recv().await.ok_or(anyhow!("Recv error"))?;
+            let pack = self
+                .stream
+                .recv()
+                .await
+                .context("Connection packet receive error")?;
+
+            self.update().await?;
 
             match &pack.content {
                 PacketContent::Control(control) => self.handle_control(control).await?,
@@ -278,18 +284,12 @@ impl AsyncConnection {
         Ok(data)
     }
 
-    async fn send_full_ack(&self) -> Result<()> {
-        let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Full {
-            ack_number: self.inc_ack(),
-            last_ackd_packet_sequence_number: self.last_received.load(Ordering::Relaxed) + 1,
-            rtt: self.rtt.load(Ordering::Relaxed),
-            rtt_variance: self.rtt_var.load(Ordering::Relaxed),
-            available_buffer_size: 1,
-            packets_receiving_rate: 1,
-            estimated_link_capacity: 1,
-            receiving_rate: 1,
-        }));
-        tracing::trace!("srt | outbound | control | {ack:?}");
-        self.send(ack).await
+    pub async fn shutdown(&self) -> Result<()> {
+        self.running.store(false, Ordering::Relaxed);
+
+        self.send(PacketContent::Control(ControlPacketInfo::Shutdown))
+            .await?;
+
+        Ok(())
     }
 }

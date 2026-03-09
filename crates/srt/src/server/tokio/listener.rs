@@ -7,13 +7,15 @@ use std::{
 use anyhow::Result;
 use tokio::{
     net::{ToSocketAddrs, UdpSocket},
-    sync::mpsc::{Receiver, Sender, channel},
+    sync::{
+        Mutex,
+        mpsc::{Receiver, Sender, channel},
+    },
 };
 
 use crate::protocol::packet::{Packet, PacketContent, control::ControlPacketInfo};
 
 const MAX_PACKET_SIZE: usize = 1500;
-const MAX_CONSECUTIVE_PACKETS_PER_CONNECTION: usize = 5;
 
 pub struct Stream {
     addr: SocketAddr,
@@ -22,12 +24,13 @@ pub struct Stream {
 }
 
 impl Stream {
+    /// Waits until message
     pub async fn recv(&mut self) -> Option<Packet> {
         self.inbound.recv().await
     }
 
     pub async fn send(&self, pack: Packet) -> Result<()> {
-        self.outbound.send((self.addr.clone(), pack)).await?;
+        self.outbound.send((self.addr, pack)).await?;
         Ok(())
     }
 }
@@ -50,18 +53,29 @@ impl AsyncListener {
     async fn inbound_loop(
         socket: Arc<UdpSocket>,
         connection_channel: Sender<Stream>,
-        mut inbound: BTreeMap<SocketAddr, Sender<Packet>>,
+        inbound: Arc<Mutex<BTreeMap<SocketAddr, Sender<Packet>>>>,
         outbound_tx: Sender<(SocketAddr, Packet)>,
     ) -> Result<()> {
         loop {
             // let addr = socket.peek_sender();
             let (addr, pack) = Self::recv(&socket).await?;
 
-            let entry = inbound.entry(addr);
+            let mut inbound_lock = inbound.lock().await;
+            let entry = inbound_lock.entry(addr);
 
             match entry {
                 // New connection
                 Entry::Vacant(vacant_entry) => {
+                    if !matches!(
+                        pack,
+                        Packet {
+                            content: PacketContent::Control(ControlPacketInfo::Handshake(_)),
+                            ..
+                        }
+                    ) {
+                        continue;
+                    }
+
                     let (inbound_tx, inbound_rx) = channel(100);
 
                     inbound_tx.send(pack).await?;
@@ -94,9 +108,20 @@ impl AsyncListener {
 
     async fn outbound_loop(
         socket: Arc<UdpSocket>,
+        inbound: Arc<Mutex<BTreeMap<SocketAddr, Sender<Packet>>>>,
         mut outbound_rx: Receiver<(SocketAddr, Packet)>,
     ) -> Result<()> {
         while let Some((addr, pack)) = outbound_rx.recv().await {
+            if matches!(
+                pack,
+                Packet {
+                    content: PacketContent::Control(ControlPacketInfo::Shutdown),
+                    ..
+                }
+            ) {
+                inbound.lock().await.remove(&addr);
+            }
+
             socket.send_to(&pack.to_raw(), addr).await?;
         }
 
@@ -104,8 +129,8 @@ impl AsyncListener {
     }
 
     pub async fn bind(addr: impl ToSocketAddrs) -> Result<Self> {
-        let inbound: BTreeMap<SocketAddr, Sender<Packet>> = BTreeMap::new();
-        let (outbound_tx, outbound_rx) = channel::<(SocketAddr, Packet)>(100);
+        let inbound = Arc::new(Mutex::new(BTreeMap::new()));
+        let (outbound_tx, outbound_rx) = channel(100);
 
         let socket = Arc::new(UdpSocket::bind(addr).await?);
 
@@ -115,12 +140,16 @@ impl AsyncListener {
         tokio::spawn(Self::inbound_loop(
             socket.clone(),
             connection_channel.0,
-            inbound,
+            inbound.clone(),
             outbound_tx.clone(),
         ));
 
         // Outbound
-        tokio::spawn(Self::outbound_loop(socket.clone(), outbound_rx));
+        tokio::spawn(Self::outbound_loop(
+            socket.clone(),
+            inbound.clone(),
+            outbound_rx,
+        ));
 
         Ok(Self {
             connection_queue: connection_channel.1,
