@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Result, bail};
 use tracing::{Level, span};
 
-use super::callback_server::OnDataHandler;
+use super::listener::OnDataHandler;
 use crate::protocol::{
     constants::{FULL_ACK_INTERVAL, HANDSHAKE_MAGIC_CODE, RTT_INIT, RTT_VAR_INIT},
     packet::{

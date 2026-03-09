@@ -15,7 +15,7 @@ use mpeg::{
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
-use srt::CallbackServer as SrtServer;
+use srt::CallbackListener as SrtListener;
 
 fn run_srt(
     segment_size: u64,
@@ -28,7 +28,7 @@ fn run_srt(
     let system_pid = Rc::new(RefCell::new(0u16));
     let clock_pid = Rc::new(RefCell::new(0u16));
 
-    let mut srt_server = SrtServer::new();
+    let mut srt_server = SrtListener::new();
 
     srt_server.on_connect({
         let running = running.clone();

@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 
-use super::callback_connection::CallbackConnection;
+use super::connection::CallbackConnection;
 use crate::protocol::{
     constants::MAX_PACKET_SIZE,
     packet::{Packet, PacketContent, control::ControlPacketInfo},
@@ -15,13 +15,13 @@ type OnConnectHandler = dyn Fn(&CallbackConnection);
 type OnDiscnnectHandler = dyn Fn(&CallbackConnection);
 pub type OnDataHandler = dyn Fn(&CallbackConnection, &[u8]);
 
-pub struct CallbackServer {
+pub struct CallbackListener {
     on_connect: Option<Box<OnConnectHandler>>,
     on_disconnect: Option<Box<OnDiscnnectHandler>>,
     on_data: Option<Box<OnDataHandler>>,
 }
 
-impl CallbackServer {
+impl CallbackListener {
     pub fn new() -> Self {
         Self {
             on_connect: None,

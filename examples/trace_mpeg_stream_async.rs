@@ -1,38 +1,24 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use anyhow::Result;
 use mpeg::{
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
-use srt::{CallbackConnection, CallbackListener as SrtListener};
+use srt::{AsyncConnection as SrtConnection, AsyncListener as SrtListener};
+use tokio::sync::Mutex;
 
-fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_env_filter("info").init();
+async fn handle_connection(mut con: SrtConnection) -> Result<()> {
+    let stream_id = con.stream_id.clone().unwrap_or_default();
+    tracing::info!("Client connected: {stream_id:?}",);
 
-    let mut srt_server = SrtListener::new();
+    let pids_pmt = Arc::new(Mutex::new(Vec::<u16>::new()));
 
-    srt_server.on_connect(|conn| {
-        tracing::info!(
-            "Client connected: {:?}",
-            conn.stream_id.clone().unwrap_or_default()
-        );
-    });
+    while let Ok(data) = con.recv_data().await {
+        tracing::info!("Packet from {stream_id:?}");
 
-    srt_server.on_disconnect(|conn| {
-        tracing::info!(
-            "Client disconnected: {:?}",
-            conn.stream_id.clone().unwrap_or_default()
-        );
-    });
-
-    let pids_pmt = Arc::new(Mutex::new(Vec::new()));
-
-    let on_data = move |conn: &CallbackConnection, mpeg_data: &[u8]| {
-        let id = conn.stream_id.clone().unwrap_or_default();
-        tracing::info!("Packet from {id:?}");
-
-        for chunk in mpeg_data.chunks_exact(188) {
-            let pack = MpegPacket::from_raw(chunk, &pids_pmt.lock().unwrap()).unwrap();
+        for chunk in data.chunks_exact(188) {
+            let pack = MpegPacket::from_raw(chunk, &pids_pmt.lock().await).unwrap();
 
             match pack.payload {
                 Some(Payload::PSI(ProgramSpecificInformation {
@@ -40,7 +26,7 @@ fn main() -> anyhow::Result<()> {
                     ..
                 })) => {
                     tracing::info!("{table:#?}");
-                    let mut lock = pids_pmt.lock().unwrap();
+                    let mut lock = pids_pmt.lock().await;
 
                     for assoc in &table.programs {
                         if !lock.contains(&assoc.program_id) {
@@ -68,12 +54,27 @@ fn main() -> anyhow::Result<()> {
                 n => tracing::info!("Other: 0x{n:X}"),
             }
         }
-    };
+    }
 
-    srt_server.on_data(on_data);
+    tracing::info!("Client disconnected: {stream_id:?}",);
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     tracing::info!("Starting SRT");
-    srt_server.run("0.0.0.0:1935")?;
+    let listener = SrtListener::bind("0.0.0.0:1935").await?;
+
+    let mut incoming = listener.incoming();
+
+    while let Some(stream) = incoming.poll_next().await {
+        let connection = SrtConnection::establish_v5(stream).await?;
+
+        handle_connection(connection).await?;
+    }
 
     Ok(())
 }
