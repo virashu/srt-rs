@@ -4,25 +4,32 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use tokio::{
     net::{ToSocketAddrs, UdpSocket},
-    sync::{
-        RwLock,
-        mpsc::{Receiver, Sender, channel, error::TryRecvError},
-    },
-    task,
+    sync::mpsc::{Receiver, Sender, channel},
 };
 
-use super::connection::AsyncConnection;
 use crate::protocol::packet::{Packet, PacketContent, control::ControlPacketInfo};
 
 const MAX_PACKET_SIZE: usize = 1500;
 const MAX_CONSECUTIVE_PACKETS_PER_CONNECTION: usize = 5;
 
 pub struct Stream {
-    pub(crate) inbound: Receiver<Packet>,
-    pub(crate) outbound: Sender<Packet>,
+    addr: SocketAddr,
+    inbound: Receiver<Packet>,
+    outbound: Sender<(SocketAddr, Packet)>,
+}
+
+impl Stream {
+    pub async fn recv(&mut self) -> Option<Packet> {
+        self.inbound.recv().await
+    }
+
+    pub async fn send(&self, pack: Packet) -> Result<()> {
+        self.outbound.send((self.addr.clone(), pack)).await?;
+        Ok(())
+    }
 }
 
 pub struct AsyncListener {
@@ -40,101 +47,80 @@ impl AsyncListener {
         Ok((addr, pack))
     }
 
-    async fn handle_single_connection_outbound(
-        socket: &UdpSocket,
-        addr: &SocketAddr,
-        chan: &mut Receiver<Packet>,
+    async fn inbound_loop(
+        socket: Arc<UdpSocket>,
+        connection_channel: Sender<Stream>,
+        mut inbound: BTreeMap<SocketAddr, Sender<Packet>>,
+        outbound_tx: Sender<(SocketAddr, Packet)>,
     ) -> Result<()> {
-        for _ in 0..MAX_CONSECUTIVE_PACKETS_PER_CONNECTION {
-            match chan.try_recv() {
-                Ok(pack) => {
-                    socket.send_to(&pack.to_raw(), addr).await?;
+        loop {
+            // let addr = socket.peek_sender();
+            let (addr, pack) = Self::recv(&socket).await?;
+
+            let entry = inbound.entry(addr);
+
+            match entry {
+                // New connection
+                Entry::Vacant(vacant_entry) => {
+                    let (inbound_tx, inbound_rx) = channel(100);
+
+                    inbound_tx.send(pack).await?;
+                    vacant_entry.insert(inbound_tx);
+
+                    let stream = Stream {
+                        addr,
+                        inbound: inbound_rx,
+                        outbound: outbound_tx.clone(),
+                    };
+
+                    connection_channel.send(stream).await?;
                 }
-                Err(TryRecvError::Empty) => {
-                    break;
-                }
-                Err(e) => {
-                    bail!("Error: {e}");
+
+                // Existing connection
+                Entry::Occupied(mut occupied_entry) => {
+                    if matches!(
+                        pack.content,
+                        PacketContent::Control(ControlPacketInfo::Shutdown)
+                    ) {
+                        tracing::info!(?addr, "Disconnect");
+                        occupied_entry.remove().send(pack).await?;
+                    } else {
+                        occupied_entry.get_mut().send(pack).await?;
+                    }
                 }
             }
+        }
+    }
+
+    async fn outbound_loop(
+        socket: Arc<UdpSocket>,
+        mut outbound_rx: Receiver<(SocketAddr, Packet)>,
+    ) -> Result<()> {
+        while let Some((addr, pack)) = outbound_rx.recv().await {
+            socket.send_to(&pack.to_raw(), addr).await?;
         }
 
         Ok(())
     }
 
     pub async fn bind(addr: impl ToSocketAddrs) -> Result<Self> {
-        let mut inbound: BTreeMap<SocketAddr, Sender<Packet>> = BTreeMap::new();
-        let outbound: Arc<RwLock<BTreeMap<SocketAddr, Receiver<Packet>>>> =
-            Arc::new(RwLock::new(BTreeMap::new()));
+        let inbound: BTreeMap<SocketAddr, Sender<Packet>> = BTreeMap::new();
+        let (outbound_tx, outbound_rx) = channel::<(SocketAddr, Packet)>(100);
 
         let socket = Arc::new(UdpSocket::bind(addr).await?);
 
         let connection_channel = channel(100);
 
         // Inbound
-        task::spawn({
-            let socket = socket.clone();
-            let outbound = outbound.clone();
-
-            async move {
-                loop {
-                    // let addr = socket.peek_sender();
-                    let (addr, pack) = Self::recv(&socket).await.unwrap();
-
-                    let entry = inbound.entry(addr);
-
-                    match entry {
-                        // New connection
-                        Entry::Vacant(vacant_entry) => {
-                            let (inbound_tx, inbound_rx) = channel(100);
-                            let (outbound_tx, outbound_rx) = channel(100);
-
-                            {
-                                let mut outbound_lock = outbound.write().await;
-                                outbound_lock.insert(addr, outbound_rx);
-                            }
-
-                            inbound_tx.send(pack).await.unwrap();
-                            vacant_entry.insert(inbound_tx);
-
-                            let stream = Stream {
-                                inbound: inbound_rx,
-                                outbound: outbound_tx,
-                            };
-
-                            connection_channel.0.send(stream).await.unwrap();
-                        }
-                        Entry::Occupied(mut occupied_entry) => {
-                            if matches!(
-                                pack.content,
-                                PacketContent::Control(ControlPacketInfo::Shutdown)
-                            ) {
-                                tracing::info!(?addr, "Disconnect");
-                                occupied_entry.remove().send(pack).await.unwrap();
-                            } else {
-                                occupied_entry.get_mut().send(pack).await.unwrap();
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        tokio::spawn(Self::inbound_loop(
+            socket.clone(),
+            connection_channel.0,
+            inbound,
+            outbound_tx.clone(),
+        ));
 
         // Outbound
-        task::spawn({
-            let socket = socket.clone();
-            let outbound = outbound.clone();
-
-            async move {
-                loop {
-                    let mut outbound_lock = outbound.write().await;
-
-                    for (addr, chan) in outbound_lock.iter_mut() {
-                        Self::handle_single_connection_outbound(&socket, addr, chan).await;
-                    }
-                }
-            }
-        });
+        tokio::spawn(Self::outbound_loop(socket.clone(), outbound_rx));
 
         Ok(Self {
             connection_queue: connection_channel.1,

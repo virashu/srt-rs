@@ -50,7 +50,7 @@ impl AsyncConnection {
         // Induction phase
         //
 
-        let in_packet_0 = stream.inbound.recv().await.unwrap();
+        let in_packet_0 = stream.recv().await.unwrap();
         let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet_0.content
         else {
             bail!("Failed to unwrap handshake");
@@ -67,7 +67,7 @@ impl AsyncConnection {
                 ..handshake
             })),
         };
-        stream.outbound.send(out_packet_0_v5).await?;
+        stream.send(out_packet_0_v5).await?;
 
         tracing::debug!("Completed Induction");
 
@@ -75,7 +75,7 @@ impl AsyncConnection {
         // Conclusion phase
         //
 
-        let in_packet_1 = stream.inbound.recv().await.unwrap();
+        let in_packet_1 = stream.recv().await.unwrap();
         let PacketContent::Control(ControlPacketInfo::Handshake(handshake)) = in_packet_1.content
         else {
             bail!("Failed to unwrap handshake");
@@ -92,7 +92,7 @@ impl AsyncConnection {
             dest_socket_id: handshake.srt_socket_id,
             content: PacketContent::Control(ControlPacketInfo::Handshake(handshake)),
         };
-        stream.outbound.send(out_packet_1_v5).await?;
+        stream.send(out_packet_1_v5).await?;
 
         tracing::debug!("Completed Conclusion");
 
@@ -146,7 +146,7 @@ impl AsyncConnection {
     }
 
     pub async fn send(&self, content: PacketContent) -> Result<()> {
-        self.stream.outbound.send(self.pack(content)?).await?;
+        self.stream.send(self.pack(content)?).await?;
 
         Ok(())
     }
@@ -264,12 +264,7 @@ impl AsyncConnection {
         self.update().await?;
 
         let data = loop {
-            let pack = self
-                .stream
-                .inbound
-                .recv()
-                .await
-                .ok_or(anyhow!("Recv error"))?;
+            let pack = self.stream.recv().await.ok_or(anyhow!("Recv error"))?;
 
             match &pack.content {
                 PacketContent::Control(control) => self.handle_control(control).await?,
